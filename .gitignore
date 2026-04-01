@@ -1,27 +1,66 @@
-# 环境变量（包含 API Key，绝对不能提交）
-.env
+# =============================================
+# AutoPatch — .gitignore
+# =============================================
 
-# Python 虚拟环境
+# ── 环境变量（包含 API Key，绝对不能提交）──
+.env
+.env.local
+.env.*.local
+
+# ── Python ────────────────────────────────
+# 虚拟环境
 .venv/
 venv/
 env/
+ENV/
 
-# Python 编译缓存
+# 编译缓存
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+*.so
 
-# 测试缓存
+# 测试与类型检查缓存
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 
-# AutoPatch 生成的补丁文件（可选，按需取消注释）
+# 分发包
+dist/
+build/
+*.egg-info/
+*.egg
+
+# ── 前端 (Node.js / React) ─────────────────
+# 依赖（体积大，通过 package.json 重新安装）
+frontend/node_modules/
+
+# Vite 构建产物
+frontend/dist/
+frontend/.vite/
+
+# TypeScript 缓存
+*.tsbuildinfo
+
+# ── AutoPatch 产物 ─────────────────────────
+# 生成的补丁文件目录（取消注释可忽略）
 # patches/
 
-# macOS 系统文件
-.DS_Store
+# 临时 clone 目录（以 autopatch_ 开头）
+/tmp/autopatch_*/
 
-# IDE 配置
+# ── 操作系统 ───────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# ── IDE / 编辑器 ───────────────────────────
 .vscode/settings.json
+.vscode/launch.json
 .idea/
+*.swp
+*.swo
+*~

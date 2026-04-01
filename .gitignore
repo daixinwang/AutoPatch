@@ -1,0 +1,27 @@
+# 环境变量（包含 API Key，绝对不能提交）
+.env
+
+# Python 虚拟环境
+.venv/
+venv/
+env/
+
+# Python 编译缓存
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# 测试缓存
+.pytest_cache/
+.mypy_cache/
+
+# AutoPatch 生成的补丁文件（可选，按需取消注释）
+# patches/
+
+# macOS 系统文件
+.DS_Store
+
+# IDE 配置
+.vscode/settings.json
+.idea/

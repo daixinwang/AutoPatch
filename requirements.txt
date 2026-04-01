@@ -1,0 +1,25 @@
+# =============================================
+# AutoPatch - GitHub Issue Auto-Fix Agent
+# 依赖列表
+# =============================================
+
+# LangGraph 核心框架 (0.2.x 最新稳定版)
+langgraph>=0.2.0,<0.3.0
+
+# LangChain 核心库
+langchain-core>=0.3.0,<0.4.0
+
+# OpenAI 接入层
+langchain-openai>=0.2.0,<0.3.0
+
+# 数据验证与结构化定义
+pydantic>=2.0.0,<3.0.0
+
+# 环境变量管理
+python-dotenv>=1.0.0
+
+# GitHub API 客户端（autopatch.py 使用）
+requests>=2.31.0
+
+# 终端日志美化 (可选，但推荐)
+rich>=13.0.0

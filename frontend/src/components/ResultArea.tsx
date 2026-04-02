@@ -70,9 +70,15 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
       </div>
 
       {/* Diff 代码块 */}
-      <div className="overflow-hidden rounded-xl border border-bg-border shadow-card">
+      <div
+        className="overflow-hidden rounded-xl shadow-card transition-colors"
+        style={{ border: '1px solid var(--terminal-border)', backgroundColor: 'var(--terminal-bg)' }}
+      >
         {/* Diff 工具栏 */}
-        <div className="flex items-center justify-between border-b border-bg-border bg-bg-card px-4 py-2.5">
+        <div
+          className="flex items-center justify-between px-4 py-2.5 transition-colors"
+          style={{ backgroundColor: 'var(--terminal-title)', borderBottom: '1px solid var(--terminal-border)' }}
+        >
           <div className="flex items-center gap-2 text-xs text-text-secondary font-mono">
             <FileCode2 className="h-3.5 w-3.5 text-brand" />
             <span>issue-{issue}.diff</span>
@@ -143,42 +149,47 @@ function Stat({
   )
 }
 
-// ── Diff 渲染：逐行着色 ────────────────────────────────────
+// ── Diff 渲染：完全跟随主题的逐行着色 ──────────────────────
 function DiffView({ diff }: { diff: string }) {
   const lines = diff.split('\n')
 
   return (
-    <div className="text-xs font-mono leading-relaxed" style={{ backgroundColor: 'var(--terminal-bg)' }}>
+    // 背景跟随主题变量（深色:#0d1117 / 浅色:#f8fafc）
+    <div
+      className="text-xs font-mono leading-relaxed transition-colors"
+      style={{ backgroundColor: 'var(--terminal-bg)' }}
+    >
       {lines.map((line, idx) => {
-        let bg = ''
-        let color = 'text-text-secondary'
+        // 用 inline style 设置行背景，确保跟随 CSS 变量
+        let rowStyle: React.CSSProperties = {}
+        let color = 'var(--terminal-text)'
 
-        if (line.startsWith('+++) ') || line.startsWith('--- ')) {
-          color = 'text-text-muted'
+        if (line.startsWith('+++') || line.startsWith('---')) {
+          color = 'var(--terminal-text-dim)'
         } else if (line.startsWith('+')) {
-          bg = 'bg-accent-green/8'
-          color = 'text-accent-green'
+          rowStyle = { backgroundColor: 'var(--diff-add-bg)',    borderLeft: '2px solid #22d3a5' }
+          color = '#16a34a'   // green-600，深浅模式都清晰
         } else if (line.startsWith('-')) {
-          bg = 'bg-accent-red/8'
-          color = 'text-accent-red'
+          rowStyle = { backgroundColor: 'var(--diff-remove-bg)', borderLeft: '2px solid #f87171' }
+          color = '#dc2626'   // red-600
         } else if (line.startsWith('@@')) {
-          bg = 'bg-accent-blue/8'
-          color = 'text-accent-blue'
+          rowStyle = { backgroundColor: 'var(--diff-hunk-bg)' }
+          color = '#2563eb'   // blue-600
         } else if (line.startsWith('#')) {
-          color = 'text-text-muted'
+          color = 'var(--terminal-text-dim)'
         } else if (line.startsWith('diff ') || line.startsWith('index ')) {
-          color = 'text-brand-glow'
+          color = '#6366f1'   // brand purple
         }
 
         return (
-          <div
-            key={idx}
-            className={cn('flex px-4 py-0.5 transition-colors', bg)}
-          >
-            <span className="mr-4 w-8 shrink-0 select-none text-right text-text-muted opacity-40">
+          <div key={idx} className="flex px-4 py-0.5 transition-colors" style={rowStyle}>
+            <span
+              className="mr-4 w-8 shrink-0 select-none text-right opacity-40"
+              style={{ color: 'var(--terminal-text-dim)' }}
+            >
               {idx + 1}
             </span>
-            <span className={color}>{line || ' '}</span>
+            <span style={{ color }}>{line || ' '}</span>
           </div>
         )
       })}

@@ -20,9 +20,19 @@
   --scrollbar-track: #0f0f17;
   --scrollbar-thumb: #1e1e2e;
 
-  /* 终端背景 */
-  --terminal-bg:    #0d1117;
-  --terminal-title: #13131e;
+  /* 终端和代码区域 */
+  --terminal-bg:        #0d1117;
+  --terminal-title:     #13131e;
+  --terminal-border:    #1e1e2e;
+  --terminal-text:      #94a3b8;
+  --terminal-text-dim:  #475569;
+  --terminal-prompt:    #818cf8;
+  --terminal-cursor:    #e2e8f0;
+
+  /* diff 行背景（深色版）*/
+  --diff-add-bg:    rgba(34,  211, 165, 0.08);
+  --diff-remove-bg: rgba(248, 113, 113, 0.08);
+  --diff-hunk-bg:   rgba(56,  189, 248, 0.08);
 
   /* 卡片渐变边框 */
   --card-border-gradient: linear-gradient(135deg, #6366f130, #1e1e2e, #6366f120);
@@ -45,8 +55,19 @@
   --scrollbar-track: #f1f5f9;
   --scrollbar-thumb: #cbd5e1;
 
-  --terminal-bg:    #1e2533;
-  --terminal-title: #252d3d;
+  /* 浅色模式下终端和代码区域也用浅色 */
+  --terminal-bg:        #f8fafc;
+  --terminal-title:     #f1f5f9;
+  --terminal-border:    #e2e8f0;
+  --terminal-text:      #334155;
+  --terminal-text-dim:  #64748b;
+  --terminal-prompt:    #4f46e5;
+  --terminal-cursor:    #0f172a;
+
+  /* diff 行背景（浅色版）*/
+  --diff-add-bg:    rgba(22, 163, 74,  0.08);
+  --diff-remove-bg: rgba(220, 38,  38, 0.08);
+  --diff-hunk-bg:   rgba(59,  130, 246, 0.08);
 
   --card-border-gradient: linear-gradient(135deg, #6366f120, #e2e8f0, #6366f110);
 }

@@ -72,11 +72,14 @@ function NodeCard({ node }: { node: AgentNode }) {
           <span className="text-2xl leading-none select-none">{node.emoji}</span>
           {/* 状态角标 */}
           {cfg.icon && (
-            <span className={cn(
-              'absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center',
-              'rounded-full bg-bg-base',
-              cfg.text,
-            )}>
+            <span
+              className={cn(
+                'absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center',
+                'rounded-full',
+                cfg.text,
+              )}
+              style={{ backgroundColor: 'var(--bg-base)' }}
+            >
               {cfg.icon}
             </span>
           )}

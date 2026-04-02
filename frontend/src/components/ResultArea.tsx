@@ -37,7 +37,7 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
               <CheckCircle2 className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-text-primary">
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
                 {isPassed ? 'Patch Generated Successfully' : 'Review Failed'}
               </p>
               <p className="text-xs text-text-secondary mt-0.5 max-w-md">
@@ -60,7 +60,15 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
           <div className="mt-4 flex flex-wrap gap-2 border-t border-bg-border pt-4">
             <span className="text-xs text-text-muted mr-1">Changed:</span>
             {result.changedFiles.map(f => (
-              <span key={f} className="flex items-center gap-1 rounded border border-bg-border bg-bg-surface px-2 py-0.5 text-[11px] font-mono text-text-secondary">
+              <span
+                key={f}
+                className="flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-mono transition-colors"
+                style={{
+                  borderColor: 'var(--bg-border)',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-secondary)',
+                }}
+              >
                 <FileCode2 className="h-3 w-3 text-brand" />
                 {f}
               </span>
@@ -94,7 +102,8 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
               href={`https://github.com/${repoUrl}/issues/${issue}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 rounded-lg border border-bg-border bg-bg-surface px-3 py-1.5 text-xs text-text-secondary transition-all hover:border-brand/30 hover:text-text-primary"
+              className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-all hover:border-brand/30 hover:text-text-primary"
+              style={{ borderColor: 'var(--bg-border)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-secondary)' }}
             >
               <GitPullRequest className="h-3.5 w-3.5" />
               View Issue
@@ -106,8 +115,9 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
                 'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all',
                 copied
                   ? 'bg-accent-green/20 text-accent-green border border-accent-green/30'
-                  : 'border border-bg-border bg-bg-surface text-text-secondary hover:border-brand/30 hover:text-text-primary',
+                  : 'border hover:border-brand/30 hover:text-text-primary',
               )}
+              style={!copied ? { borderColor: 'var(--bg-border)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-secondary)' } : undefined}
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? 'Copied!' : 'Copy Diff'}
@@ -122,7 +132,10 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
       </div>
 
       {/* 应用命令提示 */}
-      <div className="flex items-center gap-3 rounded-lg border border-bg-border bg-bg-surface px-4 py-3">
+      <div
+        className="flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors"
+        style={{ borderColor: 'var(--bg-border)', backgroundColor: 'var(--bg-surface)' }}
+      >
         <span className="text-xs text-text-muted">Apply patch:</span>
         <code className="flex-1 font-mono text-xs text-accent-blue">
           git apply issue-{issue}.diff
@@ -133,7 +146,7 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
 }
 
 function Stat({
-  icon, label, value, color = 'text-text-primary',
+  icon, label, value, color,
 }: {
   icon: React.ReactNode
   label: string
@@ -141,10 +154,19 @@ function Stat({
   color?: string
 }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-lg border border-bg-border bg-bg-surface px-3 py-1.5">
+    <div
+      className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 transition-colors"
+      style={{ borderColor: 'var(--bg-border)', backgroundColor: 'var(--bg-surface)' }}
+    >
       <span className="text-text-muted">{icon}</span>
       <span className="text-xs text-text-muted">{label}</span>
-      <span className={cn('text-xs font-semibold font-mono', color)}>{value}</span>
+      {/* color prop 有值时用 Tailwind class（+/-行），无值时用主题变量 */}
+      <span
+        className={cn('text-xs font-semibold font-mono', color)}
+        style={!color ? { color: 'var(--text-primary)' } : undefined}
+      >
+        {value}
+      </span>
     </div>
   )
 }

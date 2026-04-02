@@ -5,13 +5,13 @@ export default {
   theme: {
     extend: {
       colors: {
-        // 极客风深色调色板
+        // 通过 CSS 变量实现深/浅双主题
         bg: {
-          base:    '#0a0a0f',
-          surface: '#0f0f17',
-          card:    '#13131e',
-          border:  '#1e1e2e',
-          hover:   '#1a1a28',
+          base:    'var(--bg-base)',
+          surface: 'var(--bg-surface)',
+          card:    'var(--bg-card)',
+          border:  'var(--bg-border)',
+          hover:   'var(--bg-hover)',
         },
         brand: {
           DEFAULT: '#6366f1',
@@ -26,9 +26,9 @@ export default {
           purple: '#a78bfa',
         },
         text: {
-          primary:   '#e2e8f0',
-          secondary: '#94a3b8',
-          muted:     '#475569',
+          primary:   'var(--text-primary)',
+          secondary: 'var(--text-secondary)',
+          muted:     'var(--text-muted)',
         },
       },
       fontFamily: {

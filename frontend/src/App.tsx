@@ -26,7 +26,7 @@ export default function App() {
   const showResult   = status === 'success' && result !== null
 
   return (
-    <div className="min-h-screen bg-bg-base bg-grid-pattern">
+    <div className="min-h-screen bg-grid-pattern transition-colors" style={{ backgroundColor: 'var(--bg-base)' }}>
       {/* 顶部渐变光晕 */}
       <div className="pointer-events-none fixed inset-x-0 top-0 h-72 bg-gradient-radial from-brand/8 via-transparent to-transparent" />
 
@@ -35,7 +35,7 @@ export default function App() {
       <main className="mx-auto max-w-4xl space-y-5 px-6 py-10">
         {/* Hero 文案 */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl" style={{ color: 'var(--text-primary)' }}>
             Fix GitHub Issues{' '}
             <span className="text-gradient">Automatically</span>
           </h1>

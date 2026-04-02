@@ -7,11 +7,12 @@
    ══════════════════════════════════════════ */
 :root,
 .dark {
-  --bg-base:    #0a0a0f;
-  --bg-surface: #0f0f17;
-  --bg-card:    #13131e;
-  --bg-border:  #1e1e2e;
-  --bg-hover:   #1a1a28;
+  --bg-base:        #0a0a0f;
+  --bg-base-alpha:  rgba(10, 10, 15, 0.80);   /* Header 毛玻璃背景 */
+  --bg-surface:     #0f0f17;
+  --bg-card:        #13131e;
+  --bg-border:      #1e1e2e;
+  --bg-hover:       #1a1a28;
 
   --text-primary:   #e2e8f0;
   --text-secondary: #94a3b8;
@@ -42,11 +43,12 @@
    CSS 变量 — 浅色主题
    ══════════════════════════════════════════ */
 .light {
-  --bg-base:    #f8fafc;
-  --bg-surface: #f1f5f9;
-  --bg-card:    #ffffff;
-  --bg-border:  #e2e8f0;
-  --bg-hover:   #f1f5f9;
+  --bg-base:        #f8fafc;
+  --bg-base-alpha:  rgba(248, 250, 252, 0.85); /* Header 毛玻璃背景 */
+  --bg-surface:     #f1f5f9;
+  --bg-card:        #ffffff;
+  --bg-border:      #e2e8f0;
+  --bg-hover:       #f1f5f9;
 
   --text-primary:   #0f172a;
   --text-secondary: #475569;
@@ -79,6 +81,11 @@
 
   html {
     scroll-behavior: smooth;
+    /* 告诉浏览器当前配色方案，消除 input/select 的系统默认黑色背景 */
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
   }
 
   body {
@@ -87,6 +94,14 @@
     color: var(--text-primary);
     min-height: 100vh;
     transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  /* 重置所有 input/textarea/select，消除浏览器默认深色背景 */
+  input, textarea, select {
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+    border-color: var(--bg-border);
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
   }
 
   /* 全局滚动条美化 */
@@ -159,8 +174,16 @@
 }
 
 @layer utilities {
+  /* 深色模式：亮紫色渐变（原色）*/
   .text-gradient {
     background: linear-gradient(135deg, #818cf8, #6366f1, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  /* 浅色模式：加深紫色，保证在白底上清晰可读 */
+  .light .text-gradient {
+    background: linear-gradient(135deg, #4338ca, #4f46e5, #7c3aed);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

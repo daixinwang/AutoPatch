@@ -51,12 +51,17 @@ export default function InputSection({ status, onSubmit, onReset }: Props) {
                   placeholder="owner/repo"
                   disabled={isRunning}
                   className={cn(
-                    'w-full rounded-lg border bg-bg-surface pl-[88px] pr-4 py-2.5 text-sm',
-                    'text-text-primary placeholder:text-text-muted font-mono',
-                    'border-bg-border outline-none transition-all',
-                    'focus:border-brand/50 focus:ring-2 focus:ring-brand/10',
+                    'w-full rounded-lg border pl-[88px] pr-4 py-2.5 text-sm',
+                    'placeholder:text-text-muted font-mono',
+                    'outline-none transition-all',
+                    'focus:ring-2 focus:ring-brand/10',
                     'disabled:opacity-50 disabled:cursor-not-allowed',
                   )}
+                  style={{
+                    backgroundColor: 'var(--bg-surface)',
+                    borderColor: 'var(--bg-border)',
+                    color: 'var(--text-primary)',
+                  }}
                 />
               </div>
             </div>
@@ -79,12 +84,17 @@ export default function InputSection({ status, onSubmit, onReset }: Props) {
                   min="1"
                   disabled={isRunning}
                   className={cn(
-                    'w-full rounded-lg border bg-bg-surface pl-8 pr-4 py-2.5 text-sm',
-                    'text-text-primary placeholder:text-text-muted font-mono',
-                    'border-bg-border outline-none transition-all',
-                    'focus:border-brand/50 focus:ring-2 focus:ring-brand/10',
+                    'w-full rounded-lg border pl-8 pr-4 py-2.5 text-sm',
+                    'placeholder:text-text-muted font-mono',
+                    'outline-none transition-all',
+                    'focus:ring-2 focus:ring-brand/10',
                     'disabled:opacity-50 disabled:cursor-not-allowed',
                   )}
+                  style={{
+                    backgroundColor: 'var(--bg-surface)',
+                    borderColor: 'var(--bg-border)',
+                    color: 'var(--text-primary)',
+                  }}
                 />
               </div>
             </div>
@@ -129,7 +139,12 @@ export default function InputSection({ status, onSubmit, onReset }: Props) {
               <button
                 type="button"
                 onClick={onReset}
-                className="flex items-center gap-1.5 rounded-lg border border-bg-border bg-bg-card px-4 py-2.5 text-sm text-text-secondary transition-all hover:border-brand/30 hover:text-text-primary animate-fade-in"
+                className="flex items-center gap-1.5 rounded-lg border px-4 py-2.5 text-sm transition-all hover:border-brand/30 hover:text-text-primary animate-fade-in"
+                style={{
+                  borderColor: 'var(--bg-border)',
+                  backgroundColor: 'var(--bg-card)',
+                  color: 'var(--text-secondary)',
+                }}
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 Reset

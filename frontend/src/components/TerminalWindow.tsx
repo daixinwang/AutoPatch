@@ -59,14 +59,14 @@ export default function TerminalWindow({ logs }: Props) {
 
   return (
     <section className="animate-slide-up">
-      <div className="overflow-hidden rounded-xl border border-bg-border bg-bg-base shadow-card">
+      <div className="overflow-hidden rounded-xl border border-bg-border shadow-card" style={{ backgroundColor: 'var(--terminal-bg)' }}>
         {/* macOS 标题栏 */}
-        <div className="flex items-center gap-2 border-b border-bg-border bg-bg-card px-4 py-3">
+        <div className="flex items-center gap-2 border-b border-bg-border px-4 py-3" style={{ backgroundColor: 'var(--terminal-title)' }}>
           {/* 红黄绿圆点 */}
           <span className="h-3 w-3 rounded-full bg-[#ff5f57] shadow-[0_0_4px_#ff5f5780]" />
           <span className="h-3 w-3 rounded-full bg-[#febc2e] shadow-[0_0_4px_#febc2e80]" />
           <span className="h-3 w-3 rounded-full bg-[#28c840] shadow-[0_0_4px_#28c84080]" />
-          <span className="mx-auto text-xs text-text-muted font-mono">
+          <span className="mx-auto text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
             autopatch — bash
           </span>
           {/* 日志计数 */}

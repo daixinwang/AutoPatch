@@ -5,9 +5,11 @@ import WorkflowVisualizer from './components/WorkflowVisualizer'
 import TerminalWindow     from './components/TerminalWindow'
 import ResultArea         from './components/ResultArea'
 import { usePatchTask }   from './hooks/usePatchTask'
+import { useTheme }       from './hooks/useTheme'
 import type { PatchInput } from './types'
 
 export default function App() {
+  const { mode: themeMode, setMode: setThemeMode } = useTheme()
   const { status, nodes, logs, result, startTask, reset } = usePatchTask()
 
   const [lastInput, setLastInput] = useState<PatchInput>({
@@ -28,7 +30,7 @@ export default function App() {
       {/* 顶部渐变光晕 */}
       <div className="pointer-events-none fixed inset-x-0 top-0 h-72 bg-gradient-radial from-brand/8 via-transparent to-transparent" />
 
-      <Header />
+      <Header themeMode={themeMode} onThemeChange={setThemeMode} />
 
       <main className="mx-auto max-w-4xl space-y-5 px-6 py-10">
         {/* Hero 文案 */}

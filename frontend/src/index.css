@@ -2,6 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ══════════════════════════════════════════
+   CSS 变量 — 深色主题（默认）
+   ══════════════════════════════════════════ */
+:root,
+.dark {
+  --bg-base:    #0a0a0f;
+  --bg-surface: #0f0f17;
+  --bg-card:    #13131e;
+  --bg-border:  #1e1e2e;
+  --bg-hover:   #1a1a28;
+
+  --text-primary:   #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted:     #475569;
+
+  --scrollbar-track: #0f0f17;
+  --scrollbar-thumb: #1e1e2e;
+
+  /* 终端背景 */
+  --terminal-bg:    #0d1117;
+  --terminal-title: #13131e;
+
+  /* 卡片渐变边框 */
+  --card-border-gradient: linear-gradient(135deg, #6366f130, #1e1e2e, #6366f120);
+}
+
+/* ══════════════════════════════════════════
+   CSS 变量 — 浅色主题
+   ══════════════════════════════════════════ */
+.light {
+  --bg-base:    #f8fafc;
+  --bg-surface: #f1f5f9;
+  --bg-card:    #ffffff;
+  --bg-border:  #e2e8f0;
+  --bg-hover:   #f1f5f9;
+
+  --text-primary:   #0f172a;
+  --text-secondary: #475569;
+  --text-muted:     #94a3b8;
+
+  --scrollbar-track: #f1f5f9;
+  --scrollbar-thumb: #cbd5e1;
+
+  --terminal-bg:    #1e2533;
+  --terminal-title: #252d3d;
+
+  --card-border-gradient: linear-gradient(135deg, #6366f120, #e2e8f0, #6366f110);
+}
+
 @layer base {
   * {
     box-sizing: border-box;
@@ -13,9 +62,10 @@
 
   body {
     font-family: 'Inter', system-ui, sans-serif;
-    background-color: #0a0a0f;
-    color: #e2e8f0;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
     min-height: 100vh;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   /* 全局滚动条美化 */
@@ -24,10 +74,10 @@
     height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: #0f0f17;
+    background: var(--scrollbar-track);
   }
   ::-webkit-scrollbar-thumb {
-    background: #1e1e2e;
+    background: var(--scrollbar-thumb);
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
@@ -39,8 +89,9 @@
   /* 渐变边框卡片 */
   .card-gradient-border {
     position: relative;
-    background: #13131e;
+    background: var(--bg-card);
     border-radius: 12px;
+    transition: background-color 0.2s ease;
   }
   .card-gradient-border::before {
     content: '';
@@ -48,7 +99,7 @@
     inset: 0;
     border-radius: 12px;
     padding: 1px;
-    background: linear-gradient(135deg, #6366f130, #1e1e2e, #6366f120);
+    background: var(--card-border-gradient);
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;

@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import { CheckCircle2, Copy, Check, GitPullRequest, FileCode2, Plus, Minus, Clock, Layers } from 'lucide-react'
-import SyntaxHighlighter from 'react-syntax-highlighter'
-import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs'
 import { cn } from '../lib/utils'
 import { countDiffLines, formatElapsed } from '../lib/utils'
 import type { TaskResult } from '../types'
@@ -150,7 +148,7 @@ function DiffView({ diff }: { diff: string }) {
   const lines = diff.split('\n')
 
   return (
-    <div className="bg-[#0d1117] text-xs font-mono leading-relaxed">
+    <div className="text-xs font-mono leading-relaxed" style={{ backgroundColor: 'var(--terminal-bg)' }}>
       {lines.map((line, idx) => {
         let bg = ''
         let color = 'text-text-secondary'

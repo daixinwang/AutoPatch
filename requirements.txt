@@ -21,5 +21,9 @@ python-dotenv>=1.0.0
 # GitHub API 客户端（autopatch.py 使用）
 requests>=2.31.0
 
+# FastAPI Web 服务（server.py 使用）
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
 # 终端日志美化 (可选，但推荐)
 rich>=13.0.0

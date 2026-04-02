@@ -38,7 +38,7 @@ import os
 import tempfile
 import time
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -47,7 +47,7 @@ from pydantic import BaseModel
 
 from github_client import GitHubClient, RepoWorkspace, parse_github_url
 from diff_generator import generate_diff, get_changed_files, write_diff_file
-from agent.graph import app as agent_app, AgentState
+from agent.graph import app as agent_app, AgentState, APP_CONFIG
 from langchain_core.messages import HumanMessage
 
 # ── FastAPI 应用初始化 ────────────────────────────────────
@@ -88,7 +88,7 @@ def sse_event(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def log_event(message: str, level: str = "info", node: str | None = None) -> str:
+def log_event(message: str, level: str = "info", node: Optional[str] = None) -> str:
     return sse_event({"type": "log", "level": level, "node": node, "message": message})
 
 
@@ -96,7 +96,7 @@ def node_event(node_id: str, status: str, detail: str = "") -> str:
     return sse_event({"type": "node", "node": node_id, "status": status, "detail": detail})
 
 
-def result_event(diff: str, review_result: str, step_count: int, changed_files: list[str]) -> str:
+def result_event(diff: str, review_result: str, step_count: int, changed_files: list) -> str:
     return sse_event({
         "type":          "result",
         "diff":          diff,
@@ -190,7 +190,11 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
         def stream_in_thread():
             """在线程中运行 LangGraph stream，把每个 chunk 放入队列。"""
             try:
-                for chunk in agent_app.stream(initial_state, stream_mode="updates"):
+                for chunk in agent_app.stream(
+                    initial_state,
+                    config=APP_CONFIG,
+                    stream_mode="updates",
+                ):
                     loop.call_soon_threadsafe(queue.put_nowait, chunk)
                 loop.call_soon_threadsafe(queue.put_nowait, None)  # 结束信号
             except Exception as e:

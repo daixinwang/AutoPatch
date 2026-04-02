@@ -50,7 +50,7 @@ from diff_generator import (
     print_diff_summary,
     write_diff_file,
 )
-from agent.graph import app, AgentState
+from agent.graph import app, AgentState, APP_CONFIG
 
 
 # ══════════════════════════════════════════════
@@ -163,7 +163,7 @@ def run_agent_on_issue(
         print("\n▶️  Agent 流水线启动 (stream 模式)...\n")
         print("─" * 60)
 
-        for chunk in app.stream(initial_state, stream_mode="updates"):
+        for chunk in app.stream(initial_state, config=APP_CONFIG, stream_mode="updates"):
             step_count += 1
 
             for node_name, node_output in chunk.items():

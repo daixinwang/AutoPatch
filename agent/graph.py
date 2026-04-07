@@ -327,19 +327,25 @@ def coder_node(state: AgentState) -> dict:
     else:
         print("💻 [Node: coder_node] Coder 开始编写代码...")
 
-    # 构建完整上下文：系统提示 + 历史消息
-    # 如果有打回记录，额外注入一条 HumanMessage 明确指出问题
-    messages = [SystemMessage(content=CODER_SYSTEM_PROMPT)] + state["messages"]
-
+    # 构建上下文：系统提示 + 消息历史
     if retries > 0 and review_result.startswith("REJECT"):
+        # 打回重做时压缩消息历史：只保留 Issue 原文 + 各 Agent 的命名摘要消息，
+        # 丢弃上一轮所有工具调用 / ToolMessage 等中间步骤，防止 context 无界增长。
+        _summary_names = {"Planner", "TestRunner", "Reviewer"}
+        compressed = [
+            msg for msg in state["messages"]
+            if isinstance(msg, HumanMessage)                               # 保留原始需求
+            or (hasattr(msg, "name") and msg.name in _summary_names)      # 保留各 Agent 摘要
+        ]
         rejection_reason = review_result[len("REJECT:"):].strip()
-        messages.append(
-            HumanMessage(
-                content=(
-                    f"⚠️ 代码评审未通过，请修复以下问题后重新写入文件：\n\n{rejection_reason}"
-                )
-            )
+        messages = (
+            [SystemMessage(content=CODER_SYSTEM_PROMPT)]
+            + compressed
+            + [HumanMessage(content=f"⚠️ 代码评审未通过，请修复以下问题后重新写入文件：\n\n{rejection_reason}")]
         )
+        print(f"  [coder_node] 消息历史已压缩: {len(state['messages'])} → {len(compressed)} 条（丢弃工具调用中间步骤）")
+    else:
+        messages = [SystemMessage(content=CODER_SYSTEM_PROMPT)] + state["messages"]
 
     response = _llm_with_tools.invoke(messages)
 

@@ -108,11 +108,17 @@ REVIEWER_TOOLS = [read_file, list_directory, grep_in_file]
 
 _model_name = os.getenv("OPENAI_MODEL_NAME", "gpt-4o")
 
-# 基础 LLM（无工具绑定），供 Planner / Reviewer 使用
+# 基础 LLM（无工具绑定），供 Planner 使用
 _llm = ChatOpenAI(model=_model_name, temperature=0, streaming=False)
 
-# 绑定工具的 LLM，供 Coder 使用
-_llm_with_tools = _llm.bind_tools(TOOLS)
+# 各节点专属 LLM（模块级缓存，避免每次调用重复 bind_tools）
+_llm_with_tools    = _llm.bind_tools(TOOLS)             # Coder：全量工具
+_llm_test_runner   = _llm.bind_tools(TEST_RUNNER_TOOLS) # TestRunner：执行工具
+_llm_reviewer      = _llm.bind_tools(REVIEWER_TOOLS)    # Reviewer：只读工具
+
+# 对应的 ToolNode（同样模块级缓存）
+_test_runner_tool_node = ToolNode(tools=TEST_RUNNER_TOOLS)
+_reviewer_tool_node    = ToolNode(tools=REVIEWER_TOOLS)
 
 
 # ══════════════════════════════════════════════
@@ -356,9 +362,6 @@ def test_runner_node(state: AgentState) -> dict:
     print("\n" + "─" * 50)
     print("🧪 [Node: test_runner_node] TestRunner 开始执行测试...")
 
-    _llm_test_runner = _llm.bind_tools(TEST_RUNNER_TOOLS)
-    tool_executor = ToolNode(tools=TEST_RUNNER_TOOLS)
-
     messages = [
         SystemMessage(content=TEST_RUNNER_SYSTEM_PROMPT),
         HumanMessage(content=(
@@ -379,7 +382,7 @@ def test_runner_node(state: AgentState) -> dict:
         if hasattr(resp, "tool_calls") and resp.tool_calls:
             tool_names = [tc["name"] for tc in resp.tool_calls]
             print(f"  [TestRunner 内部] 执行工具: {tool_names}")
-            tool_result_state = tool_executor.invoke({"messages": current_messages})
+            tool_result_state = _test_runner_tool_node.invoke({"messages": current_messages})
             new_tool_msgs = tool_result_state["messages"]
             current_messages.extend(new_tool_msgs)
         else:
@@ -427,9 +430,6 @@ def reviewer_node(state: AgentState) -> dict:
     print("\n" + "─" * 50)
     print("🔍 [Node: reviewer_node] Reviewer 开始评审代码...")
 
-    # Reviewer 使用只读工具集（读文件 + 目录浏览 + 文件内搜索）
-    _llm_reviewer = _llm.bind_tools(REVIEWER_TOOLS)
-
     test_output = state.get("test_output", "").strip()
     test_section = (
         f"## TestRunner 自动测试结果\n\n{test_output}"
@@ -448,8 +448,6 @@ def reviewer_node(state: AgentState) -> dict:
     ]
 
     # Reviewer 可能需要多轮（先 read_file，再给结论）
-    # 这里用一个简单的内部循环处理工具调用
-    tool_executor = ToolNode(tools=REVIEWER_TOOLS)
     current_messages = list(messages)
 
     for _round in range(5):  # 最多 5 轮内部循环防止意外死循环
@@ -458,7 +456,7 @@ def reviewer_node(state: AgentState) -> dict:
 
         if hasattr(resp, "tool_calls") and resp.tool_calls:
             # 执行工具调用（通常是 read_file）
-            tool_result_state = tool_executor.invoke({"messages": current_messages})
+            tool_result_state = _reviewer_tool_node.invoke({"messages": current_messages})
             # ToolNode 返回包含 ToolMessage 的消息列表
             new_tool_msgs = tool_result_state["messages"]
             current_messages.extend(new_tool_msgs)

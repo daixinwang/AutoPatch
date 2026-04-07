@@ -16,13 +16,13 @@ tools/search_tools.py
 """
 
 import ast
-import os
 import re
-import subprocess
 from pathlib import Path
 from typing import Optional
 
 from langchain_core.tools import tool
+
+from tools.workspace import resolve_workspace_path
 
 # ── 安全常量 ──────────────────────────────────
 # 检索结果最大返回行数，防止输出过大撑爆 LLM context
@@ -73,7 +73,7 @@ def list_directory(
     """
     print(f"  [Tool: list_directory] 列出目录: {directory_path}（深度={max_depth}）")
     try:
-        root = Path(directory_path).resolve()
+        root = resolve_workspace_path(directory_path).resolve()
         if not root.exists():
             return f"[错误] 目录不存在: {directory_path}"
         if not root.is_dir():
@@ -156,7 +156,7 @@ def search_codebase(
     """
     print(f"  [Tool: search_codebase] 搜索 '{pattern}' in '{directory_path}' (*{file_extension})")
     try:
-        root = Path(directory_path).resolve()
+        root = resolve_workspace_path(directory_path).resolve()
         if not root.exists():
             return f"[错误] 目录不存在: {directory_path}"
 
@@ -232,7 +232,7 @@ def find_definition(
     """
     print(f"  [Tool: find_definition] 查找符号 '{symbol_name}' in '{directory_path}'")
     try:
-        root = Path(directory_path).resolve()
+        root = resolve_workspace_path(directory_path).resolve()
         if not root.exists():
             return f"[错误] 目录不存在: {directory_path}"
 
@@ -308,7 +308,7 @@ def grep_in_file(
     """
     print(f"  [Tool: grep_in_file] 在 '{file_path}' 中搜索 '{pattern}'")
     try:
-        path = Path(file_path)
+        path = resolve_workspace_path(file_path)
         if not path.exists():
             return f"[错误] 文件不存在: {file_path}"
         if not path.is_file():

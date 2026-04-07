@@ -33,8 +33,8 @@ SSE 事件格式（每条 JSON）：
 """
 
 import asyncio
+import contextvars
 import json
-import os
 import tempfile
 import time
 from pathlib import Path
@@ -49,6 +49,7 @@ from github_client import GitHubClient, RepoWorkspace, parse_github_url
 from diff_generator import generate_diff, get_changed_files, write_diff_file
 from agent.graph import app as agent_app, AgentState, APP_CONFIG
 from langchain_core.messages import HumanMessage
+from tools.workspace import set_workspace, reset_workspace
 
 # ── FastAPI 应用初始化 ────────────────────────────────────
 fastapi_app = FastAPI(
@@ -121,7 +122,7 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
     """
     start_ms = int(time.time() * 1000)
     workspace = None
-    original_cwd = os.getcwd()
+    _ws_token = None
 
     try:
         # ── Step 1: 解析 URL ──────────────────────────────
@@ -174,9 +175,9 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
             "review_retries": 0,
         }
 
-        # 切换工作目录让工具操作 clone 下来的目标仓库
-        os.chdir(tmp_dir)
-        yield log_event(f"工作目录已切换至: {tmp_dir}", "system")
+        # 设置当前请求上下文的工作目录（不修改全局 CWD，线程安全）
+        _ws_token = set_workspace(tmp_dir)
+        yield log_event(f"工作目录已设置: {tmp_dir}", "system")
 
         step_count = 0
         review_result = ""
@@ -200,9 +201,11 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
             except Exception as e:
                 loop.call_soon_threadsafe(queue.put_nowait, e)
 
-        # 启动后台线程
+        # 将当前 asyncio Task 的 ContextVar 快照传递给后台线程，
+        # 确保工具读取到正确的 workspace_dir（而非其他并发请求的目录）
         import threading
-        thread = threading.Thread(target=stream_in_thread, daemon=True)
+        ctx = contextvars.copy_context()
+        thread = threading.Thread(target=ctx.run, args=(stream_in_thread,), daemon=True)
         thread.start()
 
         # 从队列消费事件并 yield SSE
@@ -290,7 +293,6 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
             yield node_event("coder", "done")
 
         # ── Step 5: 生成 Diff ────────────────────────────
-        os.chdir(original_cwd)
         yield log_event("正在生成 diff 补丁...", "info")
 
         try:
@@ -334,12 +336,12 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
         )
 
     except Exception as e:
-        os.chdir(original_cwd)
         yield log_event(f"流水线异常: {type(e).__name__}: {e}", "error")
         yield sse_event({"type": "error", "message": str(e)})
 
     finally:
-        os.chdir(original_cwd)
+        if _ws_token is not None:
+            reset_workspace(_ws_token)
         if workspace:
             workspace.cleanup()
         yield sse_event({"type": "done"})

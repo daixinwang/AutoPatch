@@ -21,6 +21,8 @@ from pathlib import Path
 
 from langchain_core.tools import tool
 
+from tools.workspace import resolve_workspace_path
+
 # ── 安全常量 ──────────────────────────────────
 # 命令执行超时（秒）
 DEFAULT_TIMEOUT_SECONDS: int = 30
@@ -190,7 +192,7 @@ def run_pytest(
     """
     print(f"  [Tool: run_pytest] 运行 pytest {test_path} {extra_args}")
     try:
-        cwd = str(Path(working_directory).resolve())
+        cwd = str(resolve_workspace_path(working_directory))
         timeout = max(1, min(timeout_seconds, MAX_TIMEOUT_SECONDS))
 
         # 构建命令：使用当前 venv 的 python -m pytest，确保包路径正确
@@ -245,7 +247,7 @@ def run_python_script(
     """
     print(f"  [Tool: run_python_script] 运行脚本: {script_path}")
     try:
-        script = Path(script_path)
+        script = resolve_workspace_path(script_path)
 
         # 安全检查：只允许 .py 文件
         if script.suffix.lower() != ".py":
@@ -254,7 +256,7 @@ def run_python_script(
         if not script.exists():
             return f"[错误] 脚本文件不存在: {script_path}"
 
-        cwd = str(Path(working_directory).resolve())
+        cwd = str(resolve_workspace_path(working_directory))
         timeout = max(1, min(timeout_seconds, MAX_TIMEOUT_SECONDS))
 
         cmd_args = [sys.executable, str(script.resolve())]

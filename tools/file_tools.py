@@ -9,10 +9,11 @@ tools/file_tools.py
   3. 错误不崩溃，而是将错误信息 return 给 LLM，由 LLM 决策后续处理
 """
 
-import os
 from pathlib import Path
 
 from langchain_core.tools import tool
+
+from tools.workspace import resolve_workspace_path
 
 
 # ──────────────────────────────────────────────
@@ -31,7 +32,7 @@ def read_file(file_path: str) -> str:
     """
     print(f"  [Tool: read_file] 尝试读取文件: {file_path}")
     try:
-        path = Path(file_path)
+        path = resolve_workspace_path(file_path)
         if not path.exists():
             error_msg = f"[错误] 文件不存在: {file_path}"
             print(f"  [Tool: read_file] {error_msg}")
@@ -73,7 +74,7 @@ def write_and_replace_file(file_path: str, content: str) -> str:
     """
     print(f"  [Tool: write_and_replace_file] 尝试写入文件: {file_path}")
     try:
-        path = Path(file_path)
+        path = resolve_workspace_path(file_path)
 
         # 自动创建不存在的父目录
         path.parent.mkdir(parents=True, exist_ok=True)

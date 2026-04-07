@@ -29,7 +29,6 @@ AutoPatch 完整应用入口。
 """
 
 import argparse
-import os
 import sys
 import tempfile
 from datetime import datetime
@@ -51,6 +50,7 @@ from diff_generator import (
     write_diff_file,
 )
 from agent.graph import app, AgentState, APP_CONFIG
+from tools.workspace import set_workspace, reset_workspace
 
 
 # ══════════════════════════════════════════════
@@ -123,7 +123,7 @@ def run_agent_on_issue(
     以指定目录为工作区，运行多 Agent 流水线处理 Issue。
 
     Agent 内部的文件操作工具（read_file / write_file / search 等）
-    都使用相对路径，而 working_dir 通过 os.chdir 设置为当前目录，
+    都使用相对路径，而 working_dir 通过 ContextVar 传递给工具，
     从而让工具操作目标仓库文件而非 AutoPatch 自身的文件。
 
     Args:
@@ -133,10 +133,9 @@ def run_agent_on_issue(
     Returns:
         包含 final_output / review_result / step_count 的结果字典
     """
-    # 切换工作目录，让 Agent 的文件操作指向目标仓库
-    original_cwd = os.getcwd()
-    os.chdir(working_dir)
-    print(f"\n📂 [AutoPatch] 工作目录已切换至: {working_dir}")
+    # 设置工作目录（不修改全局 CWD，通过 ContextVar 传递给工具）
+    _ws_token = set_workspace(working_dir)
+    print(f"\n📂 [AutoPatch] 工作目录已设置: {working_dir}")
 
     try:
         initial_state: AgentState = {
@@ -207,9 +206,7 @@ def run_agent_on_issue(
         }
 
     finally:
-        # 无论成功失败，都恢复原始工作目录
-        os.chdir(original_cwd)
-        print(f"📂 [AutoPatch] 工作目录已恢复: {original_cwd}")
+        reset_workspace(_ws_token)
 
 
 # ══════════════════════════════════════════════

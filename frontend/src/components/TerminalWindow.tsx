@@ -42,6 +42,12 @@ function LogLine({ entry }: { entry: LogEntry }) {
       {/* 消息正文：用 CSS 变量保证在两种主题下都清晰 */}
       <span className="break-all" style={{ color: 'var(--terminal-text)' }}>
         {entry.message}
+        {entry.streaming && (
+          <span
+            className="inline-block ml-0.5 h-3 w-1.5 align-middle animate-[typing_0.7s_steps(2)_infinite]"
+            style={{ backgroundColor: 'var(--terminal-cursor)' }}
+          />
+        )}
       </span>
     </div>
   )

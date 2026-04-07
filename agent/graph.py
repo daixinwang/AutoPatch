@@ -109,8 +109,8 @@ REVIEWER_TOOLS = [read_file, list_directory, grep_in_file]
 
 _model_name = os.getenv("OPENAI_MODEL_NAME", "gpt-4o")
 
-# 基础 LLM（无工具绑定），供 Planner 使用
-_llm = ChatOpenAI(model=_model_name, temperature=0, streaming=False)
+# 基础 LLM（streaming=True 以支持 token 级流式输出）
+_llm = ChatOpenAI(model=_model_name, temperature=0, streaming=True)
 
 # 各节点专属 LLM（模块级缓存，避免每次调用重复 bind_tools）
 _llm_with_tools    = _llm.bind_tools(TOOLS)             # Coder：全量工具

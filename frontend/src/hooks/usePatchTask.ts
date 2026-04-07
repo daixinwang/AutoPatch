@@ -42,10 +42,15 @@ interface SseErrorEvent {
   type:    'error'
   message: string
 }
+interface SseTokenEvent {
+  type:    'token'
+  node:    string   // 正在输出的节点 ID（planner / coder / reviewer …）
+  content: string   // 本次 token 片段
+}
 interface SseDoneEvent {
   type: 'done'
 }
-type SseEvent = SseLogEvent | SseNodeEvent | SseResultEvent | SseErrorEvent | SseDoneEvent
+type SseEvent = SseLogEvent | SseNodeEvent | SseResultEvent | SseErrorEvent | SseTokenEvent | SseDoneEvent
 
 // ── Hook ──────────────────────────────────────────────────
 export function usePatchTask() {
@@ -55,9 +60,19 @@ export function usePatchTask() {
   const [result, setResult] = useState<TaskResult | null>(null)
   // 用 AbortController 中断进行中的 fetch 流
   const abortCtrlRef = useRef<AbortController | null>(null)
+  // 追踪当前正在流式输出的日志条目 ID（null 表示无活跃流）
+  const streamingIdRef = useRef<number | null>(null)
 
   const addLog = useCallback((level: LogEntry['level'], message: string, node?: string) => {
     setLogs(prev => [...prev, makeLog(level, message, node)])
+  }, [])
+
+  /** 将当前流式条目标记为完成（去掉光标）*/
+  const finalizeStreaming = useCallback(() => {
+    if (streamingIdRef.current === null) return
+    const id = streamingIdRef.current
+    streamingIdRef.current = null
+    setLogs(prev => prev.map(l => l.id === id ? { ...l, streaming: false } : l))
   }, [])
 
   const setNodeStatus = useCallback((id: string, s: AgentNode['status'], detail?: string) => {
@@ -67,6 +82,7 @@ export function usePatchTask() {
   const reset = useCallback(() => {
     abortCtrlRef.current?.abort()
     abortCtrlRef.current = null
+    streamingIdRef.current = null
     setStatus('idle')
     setNodes(INITIAL_NODES)
     setLogs([])
@@ -136,15 +152,40 @@ export function usePatchTask() {
 
           // ── 按事件类型处理 ────────────────────────────
           switch (event.type) {
+            case 'token': {
+              const nodeLabel = event.node
+                ? event.node.charAt(0).toUpperCase() + event.node.slice(1)
+                : undefined
+              if (streamingIdRef.current === null) {
+                // 首个 token：新建一条流式日志条目
+                const entry: LogEntry = {
+                  ...makeLog('info', event.content, nodeLabel),
+                  streaming: true,
+                }
+                streamingIdRef.current = entry.id
+                setLogs(prev => [...prev, entry])
+              } else {
+                // 后续 token：追加到当前流式条目
+                const id = streamingIdRef.current
+                setLogs(prev =>
+                  prev.map(l => l.id === id ? { ...l, message: l.message + event.content } : l)
+                )
+              }
+              break
+            }
+
             case 'log':
+              finalizeStreaming()
               addLog(event.level, event.message, event.node ?? undefined)
               break
 
             case 'node':
+              finalizeStreaming()
               setNodeStatus(event.node, event.status, event.detail)
               break
 
             case 'result': {
+              finalizeStreaming()
               const elapsed = Date.now() - startMs
               finalResult = {
                 diffContent:  event.diff,
@@ -159,12 +200,13 @@ export function usePatchTask() {
             }
 
             case 'error':
+              finalizeStreaming()
               addLog('error', event.message)
               setStatus('failed')
               return
 
             case 'done':
-              // 流结束
+              finalizeStreaming()
               break
           }
         }

@@ -13,11 +13,12 @@ export interface AgentNode {
 export type LogLevel = 'info' | 'tool' | 'warn' | 'success' | 'error' | 'system'
 
 export interface LogEntry {
-  id:        number
-  timestamp: string
-  level:     LogLevel
-  node?:     string   // 来源节点名称
-  message:   string
+  id:         number
+  timestamp:  string
+  level:      LogLevel
+  node?:      string    // 来源节点名称
+  message:    string
+  streaming?: boolean   // true 表示 LLM 仍在输出 token，条目末尾显示光标
 }
 
 // ── 任务状态机 ───────────────────────────────────────────

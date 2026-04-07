@@ -109,6 +109,10 @@ def node_event(node_id: str, status: str, detail: str = "") -> str:
     return sse_event({"type": "node", "node": node_id, "status": status, "detail": detail})
 
 
+def token_event(node_id: str, content: str) -> str:
+    return sse_event({"type": "token", "node": node_id, "content": content})
+
+
 def result_event(diff: str, review_result: str, step_count: int, changed_files: list) -> str:
     return sse_event({
         "type":          "result",
@@ -223,12 +227,18 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
         loop = asyncio.get_running_loop()
 
         def stream_in_thread():
-            """在线程中运行 LangGraph stream，把每个 chunk 放入队列。"""
+            """在线程中运行 LangGraph stream，把每个 chunk 放入队列。
+
+            stream_mode=["updates", "messages"] 同时启用两种模式：
+              - updates : 节点级状态更新（{node_name: node_output}）
+              - messages: token 级流式块（(AIMessageChunk, metadata)）
+            每个 chunk 为 (mode, data) 元组。
+            """
             try:
                 for chunk in agent_app.stream(
                     initial_state,
                     config=APP_CONFIG,
-                    stream_mode="updates",
+                    stream_mode=["updates", "messages"],
                 ):
                     loop.call_soon_threadsafe(queue.put_nowait, chunk)
                 loop.call_soon_threadsafe(queue.put_nowait, None)  # 结束信号
@@ -256,9 +266,25 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
                 yield sse_event({"type": "error", "message": str(chunk)})
                 return
 
+            # chunk 为 (mode, data) 元组
+            mode, data = chunk
+
+            # ── messages 模式：token 级流式块 ────────────────
+            if mode == "messages":
+                msg_chunk, metadata = data
+                node_name = metadata.get("langgraph_node", "")
+                node_id = NODE_ID_MAP.get(node_name, node_name)
+                content = getattr(msg_chunk, "content", "")
+                # 只推送文本 token，跳过工具调用 chunk（content 为空）
+                if content and isinstance(content, str):
+                    yield token_event(node_id, content)
+                await asyncio.sleep(0)
+                continue
+
+            # ── updates 模式：节点级状态更新 ─────────────────
             step_count += 1
 
-            for node_name, node_output in chunk.items():
+            for node_name, node_output in data.items():
                 node_id = NODE_ID_MAP.get(node_name, node_name)
 
                 # 节点进入 running 状态（首次出现）

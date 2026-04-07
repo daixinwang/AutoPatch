@@ -35,6 +35,7 @@ SSE 事件格式（每条 JSON）：
 import asyncio
 import contextvars
 import json
+import os
 import tempfile
 import time
 from pathlib import Path
@@ -58,14 +59,25 @@ fastapi_app = FastAPI(
     version="1.0.0",
 )
 
-# 允许前端跨域访问（开发阶段开放所有来源）
+# CORS：从环境变量读取，逗号分隔；未配置时退回到本地开发默认值
+_cors_origins_env = os.getenv("CORS_ORIGINS", "")
+_cors_origins = (
+    [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
+    if _cors_origins_env
+    else ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
+)
 fastapi_app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 限制同时进行的 AutoPatch 流水线数量，防止资源耗尽
+# 通过环境变量 MAX_CONCURRENT_PATCHES 配置（默认 3）
+_MAX_CONCURRENT = int(os.getenv("MAX_CONCURRENT_PATCHES", "3"))
+_pipeline_semaphore = asyncio.Semaphore(_MAX_CONCURRENT)
 
 # ── 请求体定义 ────────────────────────────────────────────
 class PatchRequest(BaseModel):
@@ -120,6 +132,17 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
       4. 运行 LangGraph Agent（在线程池中同步执行）
       5. 生成 diff 并返回结果
     """
+    # 超出并发上限时立即拒绝，避免无限排队
+    try:
+        await asyncio.wait_for(_pipeline_semaphore.acquire(), timeout=0)
+    except asyncio.TimeoutError:
+        yield sse_event({
+            "type": "error",
+            "message": f"服务器繁忙，最多支持 {_MAX_CONCURRENT} 个并发任务，请稍后重试",
+        })
+        yield sse_event({"type": "done"})
+        return
+
     start_ms = int(time.time() * 1000)
     workspace = None
     _ws_token = None
@@ -140,7 +163,7 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
         yield log_event(f"正在从 GitHub 拉取 Issue #{req.issueNumber}...", "info")
         client = GitHubClient()
         try:
-            issue = await asyncio.get_event_loop().run_in_executor(
+            issue = await asyncio.get_running_loop().run_in_executor(
                 None, client.fetch_issue, repo_info, req.issueNumber
             )
         except Exception as e:
@@ -156,7 +179,7 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
         workspace = RepoWorkspace(repo_info=repo_info, target_dir=tmp_dir)
         yield log_event(f"正在 clone 仓库 {repo_info.clone_url}...", "info")
         try:
-            await asyncio.get_event_loop().run_in_executor(None, workspace.clone)
+            await asyncio.get_running_loop().run_in_executor(None, workspace.clone)
         except RuntimeError as e:
             yield log_event(f"Clone 失败: {e}", "error")
             yield sse_event({"type": "error", "message": str(e)})
@@ -186,7 +209,7 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
         # LangGraph stream 是同步的，用 run_in_executor 跑在线程中
         # 通过队列桥接同步迭代和异步 yield
         queue: asyncio.Queue = asyncio.Queue()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def stream_in_thread():
             """在线程中运行 LangGraph stream，把每个 chunk 放入队列。"""
@@ -296,14 +319,14 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
         yield log_event("正在生成 diff 补丁...", "info")
 
         try:
-            diff_content = await asyncio.get_event_loop().run_in_executor(
+            diff_content = await asyncio.get_running_loop().run_in_executor(
                 None, generate_diff, tmp_dir
             )
         except RuntimeError as e:
             diff_content = ""
             yield log_event(f"Diff 生成失败: {e}", "warn")
 
-        changed_files_raw = await asyncio.get_event_loop().run_in_executor(
+        changed_files_raw = await asyncio.get_running_loop().run_in_executor(
             None, get_changed_files, tmp_dir
         )
         changed_files = [c["path"] for c in changed_files_raw]
@@ -313,7 +336,7 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
             from datetime import datetime
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             diff_path = Path("patches") / f"issue-{req.issueNumber}_{ts}.diff"
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None,
                 write_diff_file,
                 diff_content,
@@ -340,6 +363,7 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
         yield sse_event({"type": "error", "message": str(e)})
 
     finally:
+        _pipeline_semaphore.release()
         if _ws_token is not None:
             reset_workspace(_ws_token)
         if workspace:

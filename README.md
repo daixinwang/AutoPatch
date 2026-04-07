@@ -30,10 +30,11 @@ AutoPatch is an intelligent code repair system built on [LangGraph](https://gith
 
 - 🔍 **Autonomous codebase navigation** — `list_directory`, `search_codebase`, `find_definition`, `grep_in_file`
 - ✍️ **Automated code repair** — Coder agent reads, writes, and verifies files
-- 🧪 **Real test execution** — Runs `pytest` or scripts to validate the fix
+- 🌐 **Multi-language test execution** — Runs `pytest`, `npm test`, `cargo test`, `go test`, `mvn test`, `make test`, and more
 - 🔄 **Review-and-retry loop** — Reviewer sends failed patches back to Coder (up to 3 retries)
 - 📄 **Standard `.diff` output** — Apply with `git apply`, no manual editing required
-- 🖥️ **Modern Web Dashboard** — Real-time agent workflow visualizer + terminal log window
+- 🌊 **Real-time token streaming** — LLM output streams character-by-character in the terminal window
+- 🖥️ **Modern Web Dashboard** — Real-time agent workflow visualizer + live streaming terminal
 
 ### 🏗️ Architecture
 
@@ -41,16 +42,16 @@ AutoPatch is an intelligent code repair system built on [LangGraph](https://gith
 START
   │
   ▼
-📋 Planner          Analyzes Issue, produces structured execution plan
+📋 Planner          Analyzes Issue + repo language, produces structured execution plan
   │
   ▼
 💻 Coder ◄──────────────────────────────────────────┐
   │                                                  │  REJECT
-  ├── tool_calls ──► 🔧 Tools (read/write/search)   │  (max 3 retries)
+  ├── tool_calls ──► 🔧 Tools (read/write/search)   │  (max 3 retries, history trimmed)
   │                          │                       │
   │                          └──► Coder (loop)       │
   │                                                  │
-  └── done ──► 🧪 TestRunner (pytest / script)       │
+  └── done ──► 🧪 TestRunner (multi-language tests)  │
                         │                            │
                         ▼                            │
                   🔍 Reviewer ────────────────────────┘
@@ -71,14 +72,15 @@ AutoPatch/
 │   └── graph.py          # LangGraph StateGraph — all nodes & routing
 │
 ├── tools/
+│   ├── workspace.py      # Thread-safe workspace dir (ContextVar, concurrency-safe)
 │   ├── file_tools.py     # read_file / write_and_replace_file
 │   ├── search_tools.py   # list_directory / search_codebase / find_definition / grep_in_file
-│   └── execute_tools.py  # run_pytest / run_python_script (sandboxed)
+│   └── execute_tools.py  # run_pytest / run_python_script / run_test_command (sandboxed)
 │
 └── frontend/             # React 18 + TypeScript + Vite dashboard
     └── src/
         ├── components/   # Header / InputSection / WorkflowVisualizer / TerminalWindow / ResultArea
-        └── hooks/        # usePatchTask — state machine + mock pipeline
+        └── hooks/        # usePatchTask — SSE state machine + token streaming
 ```
 
 ### 🚀 Quick Start
@@ -119,6 +121,10 @@ GITHUB_TOKEN=ghp_your-github-token-here   # Optional, prevents rate limiting
 # Optional overrides
 OPENAI_MODEL_NAME=gpt-4o
 OPENAI_BASE_URL=https://your-proxy/v1     # If using a proxy
+
+# Server options
+CORS_ORIGINS=http://localhost:5173        # Comma-separated allowed origins (default: localhost dev ports)
+MAX_CONCURRENT_PATCHES=3                  # Max simultaneous pipeline runs (default: 3)
 ```
 
 #### 3. Run
@@ -139,7 +145,11 @@ python main.py
 **Option C — Web Dashboard:**
 
 ```bash
-# Terminal 1: start frontend
+# Terminal 1: start backend
+source .venv/bin/activate
+uvicorn server:app --reload --port 8000
+
+# Terminal 2: start frontend
 npm --prefix frontend run dev
 
 # Browser: http://localhost:5173
@@ -170,18 +180,20 @@ Options:
 | Layer | Technology |
 |-------|-----------|
 | Agent Framework | [LangGraph](https://github.com/langchain-ai/langgraph) 0.2.x |
-| LLM | OpenAI GPT-4o (via `langchain-openai`) |
+| LLM | OpenAI GPT-4o (via `langchain-openai`, token streaming enabled) |
 | Code Search | Python AST + `re` (no external deps) |
-| Test Execution | `subprocess` sandboxed runner |
+| Test Execution | `subprocess` sandboxed runner — Python, Node.js, Rust, Go, Java, Make |
 | GitHub Integration | GitHub REST API v3 (`requests`) |
+| Backend API | FastAPI + Uvicorn (SSE streaming) |
 | Frontend | React 18 + TypeScript + Vite |
-| Styling | Tailwind CSS (dark mode) |
+| Styling | Tailwind CSS (dark / light / system theme) |
 | Icons | lucide-react |
 
 ### 🔒 Security
 
 - **Tool permissions** are layered: Coder (read+write+search), TestRunner (execute-only), Reviewer (read-only)
-- **Command execution** is sandboxed: timeout limits (max 120s), output truncation (max 8KB), `.py`-only whitelist
+- **Command execution** is sandboxed: whitelist-only (`pytest`, `python`, `npm test`, `cargo test`, `go test`, `mvn test`, `gradle test`, `make test`), timeout limits (max 120s), output truncation (max 8KB)
+- **Concurrency** is capped via semaphore (`MAX_CONCURRENT_PATCHES`) to prevent resource exhaustion
 - **API keys** are loaded via `.env` — never committed (`.gitignore` enforced)
 
 ---
@@ -198,10 +210,11 @@ AutoPatch 是一个基于 [LangGraph](https://github.com/langchain-ai/langgraph)
 
 - 🔍 **自主代码库检索** — `list_directory`、`search_codebase`、`find_definition`、`grep_in_file`
 - ✍️ **自动代码修复** — Coder 智能体读取、写入、验证文件
-- 🧪 **真实测试执行** — 运行 `pytest` 或脚本验证修复结果
-- 🔄 **评审-重试循环** — Reviewer 将不通过的补丁打回给 Coder（最多3次）
+- 🌐 **多语言测试执行** — 支持 `pytest`、`npm test`、`cargo test`、`go test`、`mvn test`、`make test` 等
+- 🔄 **评审-重试循环** — Reviewer 将不通过的补丁打回给 Coder（最多3次，自动压缩历史上下文）
 - 📄 **标准 `.diff` 输出** — 通过 `git apply` 应用，无需手动修改
-- 🖥️ **现代化 Web 看板** — 实时 Agent 工作流可视化 + 终端日志窗口
+- 🌊 **Token 级实时流式输出** — LLM 输出逐字符流入终端窗口
+- 🖥️ **现代化 Web 看板** — 实时 Agent 工作流可视化 + 流式终端日志
 
 ### 🏗️ 系统架构
 
@@ -209,16 +222,16 @@ AutoPatch 是一个基于 [LangGraph](https://github.com/langchain-ai/langgraph)
 START
   │
   ▼
-📋 Planner          分析 Issue，产出结构化执行计划
+📋 Planner          分析 Issue + 仓库语言，产出结构化执行计划
   │
   ▼
 💻 Coder ◄──────────────────────────────────────────┐
   │                                                  │  REJECT
-  ├── tool_calls ──► 🔧 Tools（读/写/搜索）          │  (最多3次打回)
+  ├── tool_calls ──► 🔧 Tools（读/写/搜索）          │  (最多3次打回，自动压缩消息历史)
   │                          │                       │
   │                          └──► Coder（循环）       │
   │                                                  │
-  └── 完成 ──► 🧪 TestRunner（pytest / 脚本）        │
+  └── 完成 ──► 🧪 TestRunner（多语言测试）            │
                         │                            │
                         ▼                            │
                   🔍 Reviewer ────────────────────────┘
@@ -239,14 +252,15 @@ AutoPatch/
 │   └── graph.py          # LangGraph StateGraph — 节点定义与路由
 │
 ├── tools/
+│   ├── workspace.py      # 线程安全工作目录（ContextVar，支持并发请求）
 │   ├── file_tools.py     # read_file / write_and_replace_file
 │   ├── search_tools.py   # list_directory / search_codebase / find_definition / grep_in_file
-│   └── execute_tools.py  # run_pytest / run_python_script（沙箱执行）
+│   └── execute_tools.py  # run_pytest / run_python_script / run_test_command（沙箱执行）
 │
 └── frontend/             # React 18 + TypeScript + Vite 前端看板
     └── src/
         ├── components/   # Header / InputSection / WorkflowVisualizer / TerminalWindow / ResultArea
-        └── hooks/        # usePatchTask — 状态机 + Mock 流水线
+        └── hooks/        # usePatchTask — SSE 状态机 + token 流式输出
 ```
 
 ### 🚀 快速开始
@@ -287,6 +301,10 @@ GITHUB_TOKEN=ghp_your-github-token-here   # 可选，防止 API 限速
 # 可选配置
 OPENAI_MODEL_NAME=gpt-4o
 OPENAI_BASE_URL=https://your-proxy/v1     # 使用代理时填写
+
+# 服务器配置
+CORS_ORIGINS=http://localhost:5173        # 允许的跨域来源，逗号分隔（默认：本地开发端口）
+MAX_CONCURRENT_PATCHES=3                  # 最大并发流水线数量（默认：3）
 ```
 
 #### 3. 运行
@@ -307,7 +325,11 @@ python main.py
 **方式 C — Web 看板：**
 
 ```bash
-# 终端启动前端
+# 终端 1：启动后端
+source .venv/bin/activate
+uvicorn server:app --reload --port 8000
+
+# 终端 2：启动前端
 npm --prefix frontend run dev
 
 # 浏览器访问 http://localhost:5173
@@ -338,18 +360,20 @@ python autopatch.py <repo_url> <issue_number> [选项]
 | 层次 | 技术 |
 |------|------|
 | Agent 框架 | [LangGraph](https://github.com/langchain-ai/langgraph) 0.2.x |
-| 大语言模型 | OpenAI GPT-4o（via `langchain-openai`）|
+| 大语言模型 | OpenAI GPT-4o（via `langchain-openai`，已启用 token 流式输出）|
 | 代码检索 | Python AST + `re`（无额外依赖）|
-| 测试执行 | `subprocess` 沙箱运行器 |
+| 测试执行 | `subprocess` 沙箱运行器 — Python、Node.js、Rust、Go、Java、Make |
 | GitHub 集成 | GitHub REST API v3（`requests`）|
+| 后端 API | FastAPI + Uvicorn（SSE 流式推送）|
 | 前端框架 | React 18 + TypeScript + Vite |
-| 样式方案 | Tailwind CSS（默认深色模式）|
+| 样式方案 | Tailwind CSS（深色 / 浅色 / 跟随系统）|
 | 图标库 | lucide-react |
 
 ### 🔒 安全设计
 
 - **工具权限分层**：Coder（读+写+搜索）、TestRunner（仅执行）、Reviewer（仅读）
-- **命令执行沙箱**：超时限制（最大120秒）、输出截断（最大8KB）、仅允许 `.py` 文件
+- **命令执行沙箱**：白名单制（`pytest`、`python`、`npm test`、`cargo test`、`go test`、`mvn test`、`gradle test`、`make test`），超时限制（最大120秒），输出截断（最大8KB）
+- **并发保护**：信号量限制同时进行的流水线数量（`MAX_CONCURRENT_PATCHES`），防止资源耗尽
 - **API Key 保护**：通过 `.env` 加载，`.gitignore` 强制排除，绝不提交
 
 ---

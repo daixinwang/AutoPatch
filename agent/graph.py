@@ -619,17 +619,6 @@ def build_graph():
     return compiled
 
 
-def build_graph_with_config():
-    """
-    带运行时配置的 Graph 工厂。
-    返回编译好的 Graph，并提供推荐的 invoke/stream 配置。
-    """
-    compiled = build_graph()
-    # 推荐配置：提高递归上限，适应复杂多轮任务
-    config = {"recursion_limit": 100}
-    return compiled, config
-
-
 # ── 模块级全局实例（供外部 import 直接使用）──
 app = build_graph()
 # 推荐的运行时配置（recursion_limit 防止复杂任务被截断）

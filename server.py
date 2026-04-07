@@ -172,6 +172,16 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
             return
         yield log_event(f"✅ Issue 拉取成功: {issue.title}", "success")
         yield log_event(f"标签: {issue.labels or '无'} | 评论数: {len(issue.comments)}", "info")
+
+        # 拉取仓库元数据，获取主要编程语言
+        try:
+            meta = await asyncio.get_running_loop().run_in_executor(
+                None, client.fetch_repo_metadata, repo_info
+            )
+            repo_language = meta.get("language") or "Unknown"
+        except Exception:
+            repo_language = "Unknown"
+        yield log_event(f"仓库语言: {repo_language}", "info")
         await asyncio.sleep(0)
 
         # ── Step 3: Clone 仓库 ───────────────────────────
@@ -190,11 +200,12 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
         # ── Step 4: 运行 LangGraph Agent ────────────────
         issue_text = issue.to_prompt_text()
         initial_state: AgentState = {
-            "messages":      [HumanMessage(content=f"Issue 需求：\n\n{issue_text}")],
-            "issue_task":    issue_text,
-            "plan":          "",
-            "test_output":   "",
-            "review_result": "",
+            "messages":       [HumanMessage(content=f"Issue 需求：\n\n{issue_text}")],
+            "issue_task":     issue_text,
+            "repo_language":  repo_language,
+            "plan":           "",
+            "test_output":    "",
+            "review_result":  "",
             "review_retries": 0,
         }
 

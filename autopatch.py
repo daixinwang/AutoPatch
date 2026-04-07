@@ -118,6 +118,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def run_agent_on_issue(
     issue_text: str,
     working_dir: str,
+    repo_language: str = "Unknown",
 ) -> dict:
     """
     以指定目录为工作区，运行多 Agent 流水线处理 Issue。
@@ -139,10 +140,11 @@ def run_agent_on_issue(
 
     try:
         initial_state: AgentState = {
-            "messages": [HumanMessage(content=f"Issue 需求：\n\n{issue_text}")],
-            "issue_task": issue_text,
-            "plan": "",
-            "test_output": "",
+            "messages":      [HumanMessage(content=f"Issue 需求：\n\n{issue_text}")],
+            "issue_task":    issue_text,
+            "repo_language": repo_language,
+            "plan":          "",
+            "test_output":   "",
             "review_result": "",
             "review_retries": 0,
         }
@@ -256,6 +258,14 @@ def main() -> int:
         print("  提示: 请检查 GITHUB_TOKEN 是否已设置，以及 Issue 编号是否正确")
         return 1
 
+    # 拉取仓库元数据（获取主要编程语言，失败不阻断流程）
+    try:
+        meta = client.fetch_repo_metadata(repo_info)
+        repo_language = meta.get("language") or "Unknown"
+        print(f"  🔤 仓库语言: {repo_language}")
+    except Exception:
+        repo_language = "Unknown"
+
     # ── Step 3: Clone 仓库 ──
     print(f"\n📦 [3/5] 准备工作区...")
 
@@ -291,6 +301,7 @@ def main() -> int:
         agent_result = run_agent_on_issue(
             issue_text=issue_text,
             working_dir=str(workspace_path),
+            repo_language=repo_language,
         )
 
         # ── Step 5: 生成 Diff 文件 ──

@@ -4,7 +4,7 @@ tools/execute_tools.py
 安全的代码执行工具，供 TestRunner Agent 使用。
 
 设计原则（安全沙箱）：
-  1. 白名单机制：只允许执行预定义的安全命令前缀（pytest / python）
+  1. 白名单机制：只允许执行预定义的安全命令（pytest / python / npm / cargo / go 等）
   2. 超时熔断：所有命令都有硬性超时限制，防止无限循环卡死 Agent
   3. 输出截断：stdout/stderr 超过阈值时自动截断，避免 LLM context 爆炸
   4. 进程隔离：使用 subprocess 子进程，失败不影响主进程
@@ -13,6 +13,7 @@ tools/execute_tools.py
 工具列表：
   - run_pytest        : 对指定路径运行 pytest，返回测试报告
   - run_python_script : 运行单个 Python 脚本，捕获 stdout/stderr
+  - run_test_command  : 运行各语言通用测试命令（npm/cargo/go/make 等）
 """
 
 import subprocess
@@ -273,4 +274,82 @@ def run_python_script(
     except Exception as e:
         error_msg = f"[错误] run_python_script 执行失败: {type(e).__name__}: {e}"
         print(f"  [Tool: run_python_script] {error_msg}")
+        return error_msg
+
+
+# ──────────────────────────────────────────────
+# 工具 3：多语言通用测试命令
+# ──────────────────────────────────────────────
+
+# 允许执行的测试命令白名单（防止注入危险命令）
+_SAFE_TEST_COMMANDS: dict[str, list[str]] = {
+    # Node.js / JavaScript / TypeScript
+    "npm test":         ["npm", "test"],
+    "npm run test":     ["npm", "run", "test"],
+    "yarn test":        ["yarn", "test"],
+    "pnpm test":        ["pnpm", "test"],
+    # Rust
+    "cargo test":       ["cargo", "test"],
+    # Go
+    "go test ./...":    ["go", "test", "./..."],
+    "go test .":        ["go", "test", "."],
+    # Java / Kotlin
+    "mvn test":         ["mvn", "test"],
+    "gradle test":      ["gradle", "test"],
+    "./gradlew test":   ["./gradlew", "test"],
+    # Generic
+    "make test":        ["make", "test"],
+}
+
+
+@tool
+def run_test_command(
+    command: str,
+    working_directory: str = ".",
+    timeout_seconds: int = 120,
+) -> str:
+    """
+    对非 Python 项目运行语言原生测试命令（npm test / cargo test / go test 等）。
+
+    仅允许执行预定义白名单中的命令，拒绝任意 shell 命令以防注入。
+
+    支持的命令（完整列表）：
+      npm test, npm run test, yarn test, pnpm test
+      cargo test
+      go test ./..., go test .
+      mvn test, gradle test, ./gradlew test
+      make test
+
+    Args:
+        command:           要执行的测试命令（必须完整匹配白名单中的某一项）。
+        working_directory: 执行命令的工作目录（默认 "." 即仓库根目录）。
+        timeout_seconds:   超时秒数（默认 120，最大 {MAX_TIMEOUT_SECONDS} 秒）。
+
+    Returns:
+        命令的完整输出报告（stdout + stderr + exit code）；出错返回错误描述。
+    """
+    print(f"  [Tool: run_test_command] 执行: {command!r}")
+    try:
+        normalized = command.strip().lower()
+        cmd_args = _SAFE_TEST_COMMANDS.get(normalized)
+        if cmd_args is None:
+            allowed = "\n  ".join(_SAFE_TEST_COMMANDS.keys())
+            return (
+                f"[错误] 命令不在白名单中: {command!r}\n"
+                f"允许的命令：\n  {allowed}"
+            )
+
+        cwd = str(resolve_workspace_path(working_directory))
+        timeout = max(1, min(timeout_seconds, MAX_TIMEOUT_SECONDS))
+
+        result = _run_subprocess(cmd_args, cwd, timeout)
+        report = _format_result(command, result, cwd)
+
+        status_emoji = "✅" if result["returncode"] == 0 else "❌"
+        print(f"  [Tool: run_test_command] {status_emoji} 完成，exit code: {result['returncode']}")
+        return report
+
+    except Exception as e:
+        error_msg = f"[错误] run_test_command 执行失败: {type(e).__name__}: {e}"
+        print(f"  [Tool: run_test_command] {error_msg}")
         return error_msg

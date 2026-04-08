@@ -6,6 +6,12 @@
 # LangGraph 核心框架 (0.2.x 最新稳定版)
 langgraph>=0.2.0,<0.3.0
 
+# LangGraph PostgreSQL checkpointer（断点续传持久化）
+langgraph-checkpoint-postgres>=2.0.0
+
+# PostgreSQL 异步驱动 + 连接池（psycopg v3）
+psycopg[binary,pool]>=3.1.0
+
 # LangChain 核心库
 langchain-core>=0.3.0,<0.4.0
 

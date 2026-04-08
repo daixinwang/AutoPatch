@@ -47,6 +47,9 @@ frontend/.vite/
 # 生成的补丁文件目录（取消注释可忽略）
 # patches/
 
+# 任务元数据目录（包含本地路径，不应提交）
+tasks/
+
 # 临时 clone 目录（以 autopatch_ 开头）
 /tmp/autopatch_*/
 

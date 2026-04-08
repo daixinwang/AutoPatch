@@ -549,7 +549,7 @@ def reviewer_should_continue(
 # 6. Graph 构建与编译
 # ══════════════════════════════════════════════
 
-def build_graph():
+def build_graph(checkpointer=None):
     """
     组装四阶段多 Agent 协作的 LangGraph StateGraph。
 
@@ -574,6 +574,11 @@ def build_graph():
                                        │ (reviewer_should_continue)
                                        ├── PASS ──► END
                                        └── REJECT (≥MAX) ──► END
+
+    Args:
+        checkpointer: 可选的 LangGraph checkpointer（如 PostgresSaver）。
+                      提供时每个节点完成后自动持久化状态，支持断点续传。
+                      不提供时行为与原来相同（无持久化）。
 
     Returns:
         编译好的 CompiledGraph（Runnable）
@@ -620,12 +625,14 @@ def build_graph():
     )
 
     print("📦 [Graph] 四阶段 StateGraph 构建完成，正在编译...")
-    compiled = graph.compile()
-    print("✅ [Graph] 编译成功！流程: START→Planner→Coder⇄Tools→TestRunner→Reviewer→END")
+    compiled = graph.compile(checkpointer=checkpointer)
+    cp_label = type(checkpointer).__name__ if checkpointer else "无"
+    print(f"✅ [Graph] 编译成功！Checkpointer={cp_label}  流程: START→Planner→Coder⇄Tools→TestRunner→Reviewer→END")
     return compiled
 
 
-# ── 模块级全局实例（供外部 import 直接使用）──
+# ── 模块级全局实例（供外部 import 直接使用，无 checkpointer）──
+# server.py 在 startup 中会用 PostgresSaver 重新构建带持久化的实例。
 app = build_graph()
 # 推荐的运行时配置（recursion_limit 防止复杂任务被截断）
 APP_CONFIG = {"recursion_limit": 100}

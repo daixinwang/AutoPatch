@@ -130,11 +130,12 @@ class InstanceEnvironment:
         repo_cache.parent.mkdir(parents=True, exist_ok=True)
 
         if (repo_cache / ".git").exists() or (repo_cache / "HEAD").exists():
-            # 已有 clone → fetch
+            # 已有 clone → 尝试 fetch（失败不阻塞，SWE-bench 用历史 commit，本地通常已有）
             _run(
                 ["git", "fetch", "--all"],
                 cwd=str(repo_cache),
                 label=f"git fetch {self.instance.repo}",
+                check=False,
             )
         else:
             url = f"https://github.com/{self.instance.repo}.git"

@@ -88,8 +88,12 @@ def write_and_replace_file(file_path: str, content: str) -> str:
     print(f"  [Tool: write_and_replace_file] 尝试写入文件: {file_path}")
 
     if _is_test_file(file_path):
-        msg = f"[拒绝] 不允许修改测试文件: {file_path}。请只修改源码，不要修改测试。"
-        print(f"  [Tool: write_and_replace_file] {msg}")
+        msg = (
+            f"[拒绝] 不允许修改测试文件: {file_path}。\n"
+            "你不能创建或修改任何测试文件。请调整你的源码修改方案，使其能通过现有测试。\n"
+            "如果现有测试依赖旧的行为模式，请确保你的修复兼容该模式，或在源码中同时处理两种情况。"
+        )
+        print(f"  [Tool: write_and_replace_file] 拒绝写入测试文件")
         return msg
 
     try:
@@ -125,14 +129,17 @@ def write_and_replace_file(file_path: str, content: str) -> str:
 @tool
 def edit_file(file_path: str, old_string: str, new_string: str) -> str:
     """
-    对已有文件进行精确的局部文本替换。仅替换第一处匹配。
+    对已有文件进行精确的局部文本替换。old_string 必须在文件中唯一匹配。
 
     这是修改现有文件的首选工具——只需提供要替换的原始片段和新片段，
     无需输出整个文件内容，适用于任意大小的文件。
 
+    注意：如果 old_string 在文件中出现多次，本工具会拒绝执行并报错。
+    此时请在 old_string 中包含更多上下文（如前后几行代码）使其唯一匹配。
+
     Args:
         file_path:   要编辑的文件路径（支持相对路径和绝对路径）。
-        old_string:  文件中要被替换的原始文本（必须与文件中的内容完全匹配，包括缩进和空白）。
+        old_string:  文件中要被替换的原始文本（必须唯一匹配，包括缩进和空白）。
         new_string:  用于替换的新文本。
 
     Returns:
@@ -141,8 +148,12 @@ def edit_file(file_path: str, old_string: str, new_string: str) -> str:
     print(f"  [Tool: edit_file] 编辑文件: {file_path}")
 
     if _is_test_file(file_path):
-        msg = f"[拒绝] 不允许修改测试文件: {file_path}。请只修改源码，不要修改测试。"
-        print(f"  [Tool: edit_file] {msg}")
+        msg = (
+            f"[拒绝] 不允许修改测试文件: {file_path}。\n"
+            "你不能修改任何测试文件。请调整你的源码修改方案，使其能通过现有测试。\n"
+            "如果现有测试依赖旧的行为模式，请确保你的修复兼容该模式，或在源码中同时处理两种情况。"
+        )
+        print(f"  [Tool: edit_file] 拒绝编辑测试文件")
         return msg
 
     try:
@@ -177,10 +188,12 @@ def edit_file(file_path: str, old_string: str, new_string: str) -> str:
         count = content.count(old_string)
         if count > 1:
             error_msg = (
-                f"[警告] old_string 在文件中出现 {count} 次，"
-                f"为安全起见仅替换第一处。如需全部替换请分次操作或提供更长的上下文。"
+                f"[错误] old_string 在文件中出现了 {count} 次，无法确定替换哪一处，本次编辑未执行。\n"
+                f"请在 old_string 中包含更多上下文（如前后几行代码），使其在文件中唯一匹配。\n"
+                f"如需修改多处，请对每一处分别调用 edit_file，每次提供足够的上下文来唯一定位。"
             )
-            print(f"  [Tool: edit_file] {error_msg}")
+            print(f"  [Tool: edit_file] old_string 出现 {count} 次，拒绝执行")
+            return error_msg
 
         new_content = content.replace(old_string, new_string, 1)
         path.write_text(new_content, encoding="utf-8")

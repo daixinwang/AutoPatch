@@ -496,7 +496,14 @@ def reviewer_node(state: AgentState) -> dict:
 
     # 提取最终结论（最后一条 AI 消息的内容）
     conclusion: str = resp.content.strip()
-    is_pass = conclusion.upper().startswith("PASS")
+    # LLM 经常用 ``` 代码块包裹结论，需要先剥离再判断
+    _conclusion_inner = conclusion
+    if _conclusion_inner.startswith("```"):
+        # 去掉首行 ``` 和末尾 ```
+        lines = _conclusion_inner.splitlines()
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        _conclusion_inner = "\n".join(lines).strip()
+    is_pass = _conclusion_inner.upper().startswith("PASS")
 
     print(f"{'✅' if is_pass else '❌'} [Node: reviewer_node] 评审结论: {conclusion[:100]}")
 

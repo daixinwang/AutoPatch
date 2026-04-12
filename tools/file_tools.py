@@ -16,6 +16,18 @@ from langchain_core.tools import tool
 
 from tools.workspace import resolve_workspace_path
 
+# ── 测试文件保护 ─────────────────────────────
+import re
+
+_TEST_PATH_PATTERN = re.compile(
+    r"(^|/)tests?/|/test_[^/]+\.py$|_test\.py$",
+)
+
+
+def _is_test_file(file_path: str) -> bool:
+    """判断路径是否指向测试文件（tests/ 目录或 test_*.py 文件）。"""
+    return bool(_TEST_PATH_PATTERN.search(file_path))
+
 
 # ──────────────────────────────────────────────
 # 工具 1：读取文件
@@ -74,6 +86,12 @@ def write_and_replace_file(file_path: str, content: str) -> str:
         写入成功的确认信息；若写入失败，返回描述错误的字符串。
     """
     print(f"  [Tool: write_and_replace_file] 尝试写入文件: {file_path}")
+
+    if _is_test_file(file_path):
+        msg = f"[拒绝] 不允许修改测试文件: {file_path}。请只修改源码，不要修改测试。"
+        print(f"  [Tool: write_and_replace_file] {msg}")
+        return msg
+
     try:
         path = resolve_workspace_path(file_path)
 
@@ -121,6 +139,12 @@ def edit_file(file_path: str, old_string: str, new_string: str) -> str:
         编辑成功的确认信息；若失败，返回描述错误的字符串。
     """
     print(f"  [Tool: edit_file] 编辑文件: {file_path}")
+
+    if _is_test_file(file_path):
+        msg = f"[拒绝] 不允许修改测试文件: {file_path}。请只修改源码，不要修改测试。"
+        print(f"  [Tool: edit_file] {msg}")
+        return msg
+
     try:
         path = resolve_workspace_path(file_path)
 

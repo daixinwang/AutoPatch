@@ -196,6 +196,15 @@ class InstanceEnvironment:
         repo = self.instance.repo
         install_cfg = REPO_INSTALL_MAP.get(repo, {"install": "pip install -e ."})
 
+        # 确保 pytest 可用（Agent TestRunner 和 eval verify 都需要）
+        _run(
+            ["pip", "install", "pytest"],
+            cwd=str(workspace),
+            label="install pytest",
+            timeout=120,
+            check=False,
+        )
+
         for cmd_str in install_cfg.get("pre_install", []):
             _run(
                 cmd_str.split(),

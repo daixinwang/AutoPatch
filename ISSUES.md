@@ -36,3 +36,49 @@
    - 禁止修改 tests/ 目录下的测试文件
 
 ---
+
+## Issue #002: Reviewer PASS 判定被 Markdown 代码块干扰
+
+**日期**: 2026-04-12
+**状态**: 已修复
+**发现场景**: SWE-bench 评测 `sympy__sympy-20154` (fix1 run)
+
+### 现象
+
+Reviewer 输出 `` ```\nPASS\n理由：...``` `` 被代码块包裹，`conclusion.upper().startswith("PASS")` 判定失败，PASS 被误判为 REJECT，导致不必要的打回重做。
+
+### 修复内容
+
+`agent/graph.py` `reviewer_node` 中提取结论后先剥离 ``` 围栏再判断 PASS/REJECT。
+
+---
+
+## Issue #003: eval 工作区缺少 pytest
+
+**日期**: 2026-04-12
+**状态**: 已修复
+**发现场景**: SWE-bench 评测 `sympy__sympy-20154`
+
+### 现象
+
+`instance_env.py` 只执行 `pip install -e .` 安装目标 repo，未安装 pytest。Agent 的 TestRunner 和 eval 的 verify.py 均调用 pytest 运行测试，导致所有测试 exit code 1。
+
+### 修复内容
+
+`eval/instance_env.py` `_install_deps()` 开头增加 `pip install pytest`。
+
+---
+
+## Issue #004: Coder 仍然修改测试文件
+
+**日期**: 2026-04-12
+**状态**: 已修复
+**发现场景**: SWE-bench 评测 `sympy__sympy-20154` (fix1 run)
+
+### 现象
+
+尽管 Coder prompt 中明确写了"禁止修改 tests/ 目录"，Coder 仍修改了 `test_iterables.py`（移除 `.copy()` 调用）。纯 prompt 约束对 LLM 不够可靠。
+
+### 修复内容
+
+`tools/file_tools.py` 中 `edit_file` 和 `write_and_replace_file` 增加工具级拦截：通过正则匹配 `tests/`、`test/`、`test_*.py` 等路径模式，直接拒绝写入测试文件并返回提示信息。

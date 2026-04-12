@@ -56,6 +56,8 @@ load_dotenv()
 
 # Reviewer 最多打回几次，防止 Coder 陷入死循环
 MAX_REVIEW_RETRIES: int = 3
+# Coder→Tool 单轮最多循环次数，防止无意义搜索死循环
+MAX_CODER_STEPS: int = 25
 
 
 # ══════════════════════════════════════════════
@@ -76,6 +78,7 @@ class AgentState(MessagesState):
       - test_output   : str   TestRunner 最新一次运行报告（pytest/脚本输出）
       - review_result : str   Reviewer 最新评审结论（"PASS" 或 "REJECT: <原因>"）
       - review_retries: int   已被打回次数（路由器用于决策是否强制结束）
+      - coder_steps   : int   当前 Coder 编码轮次的 tool 调用计数（用于防死循环）
     """
     issue_task: str
     repo_language: str       # 仓库主要编程语言（如 "Python" / "TypeScript" / "Go"）
@@ -83,6 +86,7 @@ class AgentState(MessagesState):
     test_output: str
     review_result: str
     review_retries: int
+    coder_steps: int
 
 
 # ══════════════════════════════════════════════
@@ -337,14 +341,18 @@ def coder_node(state: AgentState) -> dict:
     retries = state.get("review_retries", 0)
     review_result = state.get("review_result", "")
 
-    if retries > 0 and review_result.startswith("REJECT"):
+    is_retry = retries > 0 and review_result.startswith("REJECT")
+
+    if is_retry:
         print(f"🔄 [Node: coder_node] 第 {retries} 次被打回，重新编码...")
         print(f"  Reviewer 反馈: {review_result[:100]}")
+        new_coder_steps = 1  # 重置步数计数器
     else:
         print("💻 [Node: coder_node] Coder 开始编写代码...")
+        new_coder_steps = state.get("coder_steps", 0) + 1
 
     # 构建上下文：系统提示 + 消息历史
-    if retries > 0 and review_result.startswith("REJECT"):
+    if is_retry:
         # 打回重做时压缩消息历史：只保留 Issue 原文 + 各 Agent 的命名摘要消息，
         # 丢弃上一轮所有工具调用 / ToolMessage 等中间步骤，防止 context 无界增长。
         _summary_names = {"Planner", "TestRunner", "Reviewer"}
@@ -357,7 +365,13 @@ def coder_node(state: AgentState) -> dict:
         messages = (
             [SystemMessage(content=CODER_SYSTEM_PROMPT)]
             + compressed
-            + [HumanMessage(content=f"⚠️ 代码评审未通过，请修复以下问题后重新写入文件：\n\n{rejection_reason}")]
+            + [HumanMessage(content=(
+                f"⚠️ 代码评审未通过，请修复以下问题后重新写入文件：\n\n{rejection_reason}\n\n"
+                "重要提醒：\n"
+                "- 你只能修改源码文件，不能修改或创建任何测试文件\n"
+                "- 专注于修复 Reviewer 指出的具体代码问题\n"
+                "- 修复完成后立即输出完成报告，不要做多余的搜索"
+            ))]
         )
         print(f"  [coder_node] 消息历史已压缩: {len(state['messages'])} → {len(compressed)} 条（丢弃工具调用中间步骤）")
     else:
@@ -371,7 +385,7 @@ def coder_node(state: AgentState) -> dict:
     else:
         print("✅ [Node: coder_node] 代码编写完成，等待 Reviewer 评审")
 
-    return {"messages": [response]}
+    return {"messages": [response], "coder_steps": new_coder_steps}
 
 
 def test_runner_node(state: AgentState) -> dict:
@@ -534,11 +548,17 @@ def coder_should_continue(
 ) -> Literal["tool_node", "test_runner_node"]:
     """
     Coder 完成一轮后的路由：
-      - 如果最新消息包含 tool_calls → 执行工具，继续 ReAct 循环
+      - 如果最新消息包含 tool_calls 且未超步数上限 → 执行工具，继续 ReAct 循环
+      - 超出步数上限 → 强制进入 TestRunner（防止死循环）
       - 否则（Coder 完成编码）→ 进入 TestRunner 运行测试
     """
     last_message = state["messages"][-1]
+    coder_steps = state.get("coder_steps", 0)
+
     if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+        if coder_steps >= MAX_CODER_STEPS:
+            print(f"⚠️ [Router: coder] Coder 已执行 {coder_steps} 步，达到上限，强制进入测试 → test_runner_node")
+            return "test_runner_node"
         print("🔀 [Router: coder] 有工具调用 → tool_node")
         return "tool_node"
     print("🔀 [Router: coder] 编码完成 → test_runner_node")

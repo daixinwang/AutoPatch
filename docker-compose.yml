@@ -1,0 +1,34 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - AUTOPATCH_API_KEY=${AUTOPATCH_API_KEY:-}
+      - DATABASE_URL=postgresql://autopatch:autopatch@postgres:5432/autopatch
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - patches:/app/patches
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: autopatch
+      POSTGRES_PASSWORD: autopatch
+      POSTGRES_DB: autopatch
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autopatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  patches:

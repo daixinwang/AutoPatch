@@ -1,0 +1,13 @@
+.git
+.venv
+__pycache__
+*.pyc
+node_modules
+frontend/node_modules
+.env
+.env.*
+!.env.example
+patches/
+tasks/
+eval/results/
+.claude/

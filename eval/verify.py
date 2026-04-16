@@ -7,9 +7,12 @@ eval/verify.py
 
 from __future__ import annotations
 
+import logging
 import re
 import subprocess
 from typing import Callable, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 def _build_django_cmd(test_ids: List[str], workspace: str) -> List[str]:
     """Django 的测试命令。test_ids 形如 'tests.test_module.TestClass.test_method'。"""

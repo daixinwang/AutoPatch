@@ -15,6 +15,7 @@ GitHub API 封装层。
   - python-dotenv（读取 GITHUB_TOKEN）
 """
 
+import logging
 import os
 import re
 import shutil
@@ -29,6 +30,8 @@ import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # ── 常量 ──────────────────────────────────────
 GITHUB_API_BASE = "https://api.github.com"
@@ -183,9 +186,9 @@ class GitHubClient:
         })
         if self._token:
             self._session.headers["Authorization"] = f"Bearer {self._token}"
-            print(f"  [GitHubClient] 已加载 GitHub Token（末4位: ...{self._token[-4:]}）")
+            logger.info(f"  [GitHubClient] 已加载 GitHub Token（末4位: ...{self._token[-4:]}）")
         else:
-            print("  [GitHubClient] ⚠️  未设置 GITHUB_TOKEN，使用匿名访问（限速 60 req/h）")
+            logger.warning("  [GitHubClient] ⚠️  未设置 GITHUB_TOKEN，使用匿名访问（限速 60 req/h）")
 
     def _get(self, url: str) -> Union[dict, list]:
         """
@@ -218,7 +221,7 @@ class GitHubClient:
         Raises:
             requests.HTTPError: Issue 不存在或无权访问时抛出
         """
-        print(f"  [GitHubClient] 拉取 Issue #{issue_number} from {repo_info.full_name}...")
+        logger.info(f"  [GitHubClient] 拉取 Issue #{issue_number} from {repo_info.full_name}...")
 
         # 拉取 Issue 基本信息
         issue_url = f"{repo_info.api_base}/issues/{issue_number}"
@@ -230,7 +233,7 @@ class GitHubClient:
         comments: list[str] = []
         comments_url = data.get("comments_url", "")
         if comments_url and data.get("comments", 0) > 0:
-            print(f"  [GitHubClient] 拉取 {data['comments']} 条评论...")
+            logger.info(f"  [GitHubClient] 拉取 {data['comments']} 条评论...")
             comments_data = self._get(comments_url)
             if isinstance(comments_data, list):
                 comments = [c.get("body", "") for c in comments_data if c.get("body")]
@@ -245,7 +248,7 @@ class GitHubClient:
             html_url=data.get("html_url", ""),
         )
 
-        print(f"  [GitHubClient] ✅ Issue 拉取成功: [{issue.state}] {issue.title}")
+        logger.info(f"  [GitHubClient] ✅ Issue 拉取成功: [{issue.state}] {issue.title}")
         return issue
 
     def fetch_repo_metadata(self, repo_info: RepoInfo) -> dict:
@@ -258,7 +261,7 @@ class GitHubClient:
         Returns:
             仓库元数据字典
         """
-        print(f"  [GitHubClient] 拉取仓库元数据: {repo_info.full_name}...")
+        logger.info(f"  [GitHubClient] 拉取仓库元数据: {repo_info.full_name}...")
         data = self._get(repo_info.api_base)
         return {
             "default_branch": data.get("default_branch", "main"),
@@ -322,8 +325,8 @@ class RepoWorkspace:
         Raises:
             RuntimeError: clone 失败时抛出，包含 git 错误输出
         """
-        print(f"\n📥 [RepoWorkspace] 开始 clone: {self.repo_info.clone_url}")
-        print(f"   目标目录: {self.path}")
+        logger.info(f"📥 [RepoWorkspace] 开始 clone: {self.repo_info.clone_url}")
+        logger.debug(f"   目标目录: {self.path}")
 
         cmd = ["git", "clone", "--depth", str(self.depth)]
         if self.branch:
@@ -345,7 +348,7 @@ class RepoWorkspace:
             raise RuntimeError(f"git clone 超时（超过 300 秒）: {self.repo_info.clone_url}")
 
         self._cloned = True
-        print(f"✅ [RepoWorkspace] clone 完成 → {self.path}")
+        logger.info(f"✅ [RepoWorkspace] clone 完成 → {self.path}")
         return self.path
 
     def get_tracked_files(self) -> list[str]:
@@ -367,7 +370,7 @@ class RepoWorkspace:
         """删除临时工作目录（仅当由本对象创建时才删除）。"""
         if self._owns_dir and self.path.exists():
             shutil.rmtree(self.path, ignore_errors=True)
-            print(f"🗑️  [RepoWorkspace] 已清理临时目录: {self.path}")
+            logger.info(f"🗑️  [RepoWorkspace] 已清理临时目录: {self.path}")
 
     def __enter__(self) -> "RepoWorkspace":
         self.clone()

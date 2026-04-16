@@ -24,6 +24,10 @@ from langchain_core.tools import tool
 
 from tools.workspace import resolve_workspace_path
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 # ── 安全常量 ──────────────────────────────────
 # 检索结果最大返回行数，防止输出过大撑爆 LLM context
 MAX_SEARCH_RESULTS = 50
@@ -71,7 +75,7 @@ def list_directory(
     Returns:
         树状目录结构字符串；出错时返回错误描述。
     """
-    print(f"  [Tool: list_directory] 列出目录: {directory_path}（深度={max_depth}）")
+    logger.debug(f"  [Tool: list_directory] 列出目录: {directory_path}（深度={max_depth}）")
     try:
         root = resolve_workspace_path(directory_path).resolve()
         if not root.exists():
@@ -117,12 +121,12 @@ def list_directory(
 
         _walk(root, 1, "")
         result = "\n".join(lines)
-        print(f"  [Tool: list_directory] 完成，共 {entry_count} 条目")
+        logger.debug(f"  [Tool: list_directory] 完成，共 {entry_count} 条目")
         return result
 
     except Exception as e:
         error_msg = f"[错误] list_directory 执行失败: {type(e).__name__}: {e}"
-        print(f"  [Tool: list_directory] {error_msg}")
+        logger.error(f"  [Tool: list_directory] {error_msg}")
         return error_msg
 
 
@@ -154,7 +158,7 @@ def search_codebase(
         匹配结果字符串，格式为 "文件路径:行号: 代码行内容"；
         未找到返回提示；出错返回错误描述。
     """
-    print(f"  [Tool: search_codebase] 搜索 '{pattern}' in '{directory_path}' (*{file_extension})")
+    logger.debug(f"  [Tool: search_codebase] 搜索 '{pattern}' in '{directory_path}' (*{file_extension})")
     try:
         root = resolve_workspace_path(directory_path).resolve()
         if not root.exists():
@@ -193,12 +197,12 @@ def search_codebase(
             return f"[无结果] 在 '{directory_path}' 中未找到匹配 '{pattern}' 的 {file_extension} 文件内容"
 
         result = "\n".join(matches)
-        print(f"  [Tool: search_codebase] 找到 {len(matches)} 条匹配")
+        logger.debug(f"  [Tool: search_codebase] 找到 {len(matches)} 条匹配")
         return result
 
     except Exception as e:
         error_msg = f"[错误] search_codebase 执行失败: {type(e).__name__}: {e}"
-        print(f"  [Tool: search_codebase] {error_msg}")
+        logger.error(f"  [Tool: search_codebase] {error_msg}")
         return error_msg
 
 
@@ -230,7 +234,7 @@ def find_definition(
         所有匹配的定义位置，格式为 "文件路径:行号: def/class 签名"；
         未找到时返回提示；出错返回错误描述。
     """
-    print(f"  [Tool: find_definition] 查找符号 '{symbol_name}' in '{directory_path}'")
+    logger.debug(f"  [Tool: find_definition] 查找符号 '{symbol_name}' in '{directory_path}'")
     try:
         root = resolve_workspace_path(directory_path).resolve()
         if not root.exists():
@@ -273,12 +277,12 @@ def find_definition(
             return f"[无结果] 未找到符号 '{symbol_name}' 的定义（已搜索 {directory_path} 下所有 .py 文件）"
 
         result = "\n".join(results)
-        print(f"  [Tool: find_definition] 找到 {len(results)} 处定义")
+        logger.debug(f"  [Tool: find_definition] 找到 {len(results)} 处定义")
         return result
 
     except Exception as e:
         error_msg = f"[错误] find_definition 执行失败: {type(e).__name__}: {e}"
-        print(f"  [Tool: find_definition] {error_msg}")
+        logger.error(f"  [Tool: find_definition] {error_msg}")
         return error_msg
 
 
@@ -306,7 +310,7 @@ def grep_in_file(
     Returns:
         带行号和上下文的匹配结果；未找到返回提示；出错返回错误描述。
     """
-    print(f"  [Tool: grep_in_file] 在 '{file_path}' 中搜索 '{pattern}'")
+    logger.debug(f"  [Tool: grep_in_file] 在 '{file_path}' 中搜索 '{pattern}'")
     try:
         path = resolve_workspace_path(file_path)
         if not path.exists():
@@ -352,10 +356,10 @@ def grep_in_file(
                 output_parts.append(f"{marker} {lineno:4d} | {lines[i]}")
 
         result = "\n".join(output_parts)
-        print(f"  [Tool: grep_in_file] 找到 {len(match_linenos)} 处匹配，{len(segments)} 个代码段")
+        logger.debug(f"  [Tool: grep_in_file] 找到 {len(match_linenos)} 处匹配，{len(segments)} 个代码段")
         return result
 
     except Exception as e:
         error_msg = f"[错误] grep_in_file 执行失败: {type(e).__name__}: {e}"
-        print(f"  [Tool: grep_in_file] {error_msg}")
+        logger.error(f"  [Tool: grep_in_file] {error_msg}")
         return error_msg

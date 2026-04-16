@@ -12,11 +12,17 @@ AutoPatch Agent 入口文件。
     3. 使用 stream 模式逐步打印每次状态更新，追踪 Graph 运行轨迹
 """
 
+import logging
 import sys
+
 from langchain_core.messages import HumanMessage
+
+from logging_config import setup_logging
 
 # 导入编译好的 Graph 应用
 from agent.graph import app, AgentState
+
+logger = logging.getLogger(__name__)
 
 
 # ══════════════════════════════════════════════
@@ -44,11 +50,6 @@ Issue #42: 项目缺少基础数学工具模块
 """
 
 
-def print_separator(char: str = "═", width: int = 60) -> None:
-    """打印分隔线，提升日志可读性。"""
-    print(char * width)
-
-
 def run_agent(issue_description: str) -> None:
     """
     运行 AutoPatch 多 Agent 流水线并实时打印状态流。
@@ -58,11 +59,8 @@ def run_agent(issue_description: str) -> None:
     Args:
         issue_description: 原始 Issue 描述文本
     """
-    print_separator("═")
-    print("🚀 AutoPatch Multi-Agent 流水线启动")
-    print_separator("═")
-    print(f"\n📋 任务描述:\n{issue_description.strip()}\n")
-    print_separator("─")
+    logger.info("🚀 AutoPatch Multi-Agent 流水线启动")
+    logger.debug("📋 任务描述:\n%s", issue_description.strip())
 
     # 初始化状态：包含全部自定义字段的初始值
     initial_state: AgentState = {
@@ -85,59 +83,54 @@ def run_agent(issue_description: str) -> None:
         "reviewer_node":     "🔍 Reviewer",
     }
 
-    print("\n▶️  开始运行 Graph (stream 模式)...\n")
+    logger.info("▶️  开始运行 Graph (stream 模式)...")
 
     step_count = 0
     final_output = None
 
     for chunk in app.stream(initial_state, stream_mode="updates"):
         step_count += 1
-        print_separator("·", 40)
-        print(f"📨 [Step {step_count}] 状态更新:")
+        logger.info("📨 [Step %d] 状态更新:", step_count)
 
         for node_name, node_output in chunk.items():
             icon = NODE_ICONS.get(node_name, f"[{node_name}]")
-            print(f"  来源节点: {icon}")
+            logger.info("  来源节点: %s", icon)
 
             # 打印新增的自定义状态字段变化
             if "plan" in node_output and node_output["plan"]:
                 plan_preview = node_output["plan"][:150].replace("\n", " ")
-                print(f"  📝 plan 已更新: {plan_preview}...")
+                logger.debug("  📝 plan 已更新: %s...", plan_preview)
 
             if "test_output" in node_output and node_output["test_output"]:
                 # 只打印关键行（PASS/FAIL/ERROR）
                 key_lines = [l for l in node_output["test_output"].splitlines()
                              if any(kw in l.upper() for kw in ["PASS", "FAIL", "ERROR", "EXIT", "OK"])]
                 summary = " | ".join(key_lines[:3]) if key_lines else node_output["test_output"][:80]
-                print(f"  🧪 test_output: {summary}")
+                logger.info("  🧪 test_output: %s", summary)
 
             if "review_result" in node_output and node_output["review_result"]:
-                print(f"  🏷️  review_result: {node_output['review_result'][:100]}")
+                logger.info("  🏷️  review_result: %s", node_output['review_result'][:100])
 
             if "review_retries" in node_output:
-                print(f"  🔁 review_retries: {node_output['review_retries']}")
+                logger.debug("  🔁 review_retries: %s", node_output['review_retries'])
 
             # 打印消息内容预览
             if "messages" in node_output:
                 for msg in node_output["messages"]:
                     role = type(msg).__name__
                     content_preview = _preview_content(msg)
-                    print(f"  消息类型: {role}")
-                    print(f"  内容预览: {content_preview}")
+                    logger.debug("  消息类型: %s", role)
+                    logger.debug("  内容预览: %s", content_preview)
 
                     # 保存 Reviewer 最终通过或 Coder 完成报告作为输出
                     if role == "AIMessage" and not getattr(msg, "tool_calls", None):
                         final_output = msg.content
 
-    print_separator("═")
-    print(f"\n🎉 流水线运行完毕！共执行 {step_count} 步")
-    print(f"   流程: Planner → Coder ⇄ Tools → TestRunner → Reviewer\n")
+    logger.info("🎉 流水线运行完毕！共执行 %d 步", step_count)
+    logger.info("   流程: Planner → Coder ⇄ Tools → TestRunner → Reviewer")
 
     if final_output:
-        print("📝 最终输出报告：")
-        print_separator("─")
-        print(final_output)
-        print_separator("─")
+        logger.info("📝 最终输出报告：\n%s", final_output)
 
 
 def _preview_content(msg) -> str:
@@ -174,11 +167,12 @@ def _preview_content(msg) -> str:
 # 入口
 # ══════════════════════════════════════════════
 if __name__ == "__main__":
+    setup_logging()
     try:
         run_agent(TEST_ISSUE)
     except KeyboardInterrupt:
-        print("\n\n⏹️  用户中断运行")
+        logger.warning("⏹️  用户中断运行")
         sys.exit(0)
     except Exception as e:
-        print(f"\n❌ Agent 运行出错: {type(e).__name__}: {e}")
+        logger.error("Agent 运行出错: %s: %s", type(e).__name__, e)
         raise

@@ -11,10 +11,14 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
+import logging
+
 from eval.config import EvalConfig
 from eval.dataset import SWEBenchInstance
 from eval.instance_env import InstanceEnvironment, SetupError
 from eval.verify import classify_result, run_tests
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -80,7 +84,7 @@ class InstanceEvaluator:
                 baseline_all_fail = all(not v for v in baseline.values())
                 result.baseline_valid = baseline_all_fail
                 if not baseline_all_fail:
-                    print(f"  [Eval] 警告: 基线验证未通过，部分 FAIL_TO_PASS 测试在修复前就通过了")
+                    logger.warning(f"  [Eval] 警告: 基线验证未通过，部分 FAIL_TO_PASS 测试在修复前就通过了")
 
             # 3. 运行 AutoPatch pipeline
             from autopatch import run_agent_on_issue

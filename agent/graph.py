@@ -46,18 +46,14 @@ from tools.search_tools import (
     search_codebase,
 )
 from tools.execute_tools import run_pytest, run_python_script, run_test_command
+from config import MAX_REVIEW_RETRIES, MAX_CODER_STEPS, OPENAI_MODEL_NAME, RECURSION_LIMIT
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 加载 .env 中的环境变量
 load_dotenv()
-
-# ══════════════════════════════════════════════
-# 常量
-# ══════════════════════════════════════════════
-
-# Reviewer 最多打回几次，防止 Coder 陷入死循环
-MAX_REVIEW_RETRIES: int = 3
-# Coder→Tool 单轮最多循环次数，防止无意义搜索死循环
-MAX_CODER_STEPS: int = 25
 
 
 # ══════════════════════════════════════════════
@@ -112,7 +108,7 @@ TEST_RUNNER_TOOLS = [run_pytest, run_python_script, run_test_command]
 # Reviewer 只需只读工具，不需要写权限
 REVIEWER_TOOLS = [read_file, list_directory, grep_in_file]
 
-_model_name = os.getenv("OPENAI_MODEL_NAME", "gpt-4o")
+_model_name = OPENAI_MODEL_NAME
 
 # 基础 LLM（streaming=True 以支持 token 级流式输出）
 _llm = ChatOpenAI(model=_model_name, temperature=0, streaming=True)
@@ -297,8 +293,7 @@ def planner_node(state: AgentState) -> dict:
     Returns:
         更新 plan 和 messages 的状态字典
     """
-    print("\n" + "═" * 50)
-    print("📋 [Node: planner_node] Planner 开始拆解任务...")
+    logger.info("📋 [Node: planner_node] Planner 开始拆解任务...")
 
     lang = state.get("repo_language", "Unknown") or "Unknown"
     messages = [
@@ -312,8 +307,8 @@ def planner_node(state: AgentState) -> dict:
     response: AIMessage = _llm.invoke(messages)
     plan_text: str = response.content
 
-    print(f"📋 [Node: planner_node] 计划制定完成（{len(plan_text)} 字符）")
-    print(f"  计划预览: {plan_text[:120]}...")
+    logger.info(f"📋 [Node: planner_node] 计划制定完成（{len(plan_text)} 字符）")
+    logger.debug(f"  计划预览: {plan_text[:120]}...")
 
     return {
         "plan": plan_text,
@@ -337,18 +332,17 @@ def coder_node(state: AgentState) -> dict:
     Returns:
         更新 messages 的状态字典
     """
-    print("\n" + "─" * 50)
     retries = state.get("review_retries", 0)
     review_result = state.get("review_result", "")
 
     is_retry = retries > 0 and review_result.startswith("REJECT")
 
     if is_retry:
-        print(f"🔄 [Node: coder_node] 第 {retries} 次被打回，重新编码...")
-        print(f"  Reviewer 反馈: {review_result[:100]}")
+        logger.info(f"🔄 [Node: coder_node] 第 {retries} 次被打回，重新编码...")
+        logger.debug(f"  Reviewer 反馈: {review_result[:100]}")
         new_coder_steps = 1  # 重置步数计数器
     else:
-        print("💻 [Node: coder_node] Coder 开始编写代码...")
+        logger.info("💻 [Node: coder_node] Coder 开始编写代码...")
         new_coder_steps = state.get("coder_steps", 0) + 1
 
     # 构建上下文：系统提示 + 消息历史
@@ -373,7 +367,7 @@ def coder_node(state: AgentState) -> dict:
                 "- 修复完成后立即输出完成报告，不要做多余的搜索"
             ))]
         )
-        print(f"  [coder_node] 消息历史已压缩: {len(state['messages'])} → {len(compressed)} 条（丢弃工具调用中间步骤）")
+        logger.debug(f"  [coder_node] 消息历史已压缩: {len(state['messages'])} → {len(compressed)} 条（丢弃工具调用中间步骤）")
     else:
         messages = [SystemMessage(content=CODER_SYSTEM_PROMPT)] + state["messages"]
 
@@ -381,9 +375,9 @@ def coder_node(state: AgentState) -> dict:
 
     if hasattr(response, "tool_calls") and response.tool_calls:
         tool_names = [tc["name"] for tc in response.tool_calls]
-        print(f"🔧 [Node: coder_node] 调用工具: {tool_names}")
+        logger.debug(f"🔧 [Node: coder_node] 调用工具: {tool_names}")
     else:
-        print("✅ [Node: coder_node] 代码编写完成，等待 Reviewer 评审")
+        logger.info("✅ [Node: coder_node] 代码编写完成，等待 Reviewer 评审")
 
     return {"messages": [response], "coder_steps": new_coder_steps}
 
@@ -403,8 +397,7 @@ def test_runner_node(state: AgentState) -> dict:
     Returns:
         更新 test_output 和 messages 的状态字典
     """
-    print("\n" + "─" * 50)
-    print("🧪 [Node: test_runner_node] TestRunner 开始执行测试...")
+    logger.info("🧪 [Node: test_runner_node] TestRunner 开始执行测试...")
 
     messages = [
         SystemMessage(content=TEST_RUNNER_SYSTEM_PROMPT),
@@ -425,7 +418,7 @@ def test_runner_node(state: AgentState) -> dict:
 
         if hasattr(resp, "tool_calls") and resp.tool_calls:
             tool_names = [tc["name"] for tc in resp.tool_calls]
-            print(f"  [TestRunner 内部] 执行工具: {tool_names}")
+            logger.debug(f"  [TestRunner 内部] 执行工具: {tool_names}")
             tool_result_state = _test_runner_tool_node.invoke({"messages": current_messages})
             new_tool_msgs = tool_result_state["messages"]
             current_messages.extend(new_tool_msgs)
@@ -437,13 +430,13 @@ def test_runner_node(state: AgentState) -> dict:
     if not test_report:
         test_report = "[TestRunner] 未能生成测试报告（可能超出循环次数）"
 
-    print(f"🧪 [Node: test_runner_node] 测试完成，报告长度: {len(test_report)} 字符")
+    logger.info(f"🧪 [Node: test_runner_node] 测试完成，报告长度: {len(test_report)} 字符")
     # 预览关键行（PASSED/FAILED/ERROR）
     key_lines = [l for l in test_report.splitlines() if any(
         kw in l.upper() for kw in ["PASS", "FAIL", "ERROR", "EXIT"]
     )]
     if key_lines:
-        print(f"  关键行: {key_lines[:3]}")
+        logger.debug(f"  关键行: {key_lines[:3]}")
 
     return {
         "test_output": test_report,
@@ -471,8 +464,7 @@ def reviewer_node(state: AgentState) -> dict:
     Returns:
         更新 review_result 和 messages 的状态字典
     """
-    print("\n" + "─" * 50)
-    print("🔍 [Node: reviewer_node] Reviewer 开始评审代码...")
+    logger.info("🔍 [Node: reviewer_node] Reviewer 开始评审代码...")
 
     test_output = state.get("test_output", "").strip()
     test_section = (
@@ -505,7 +497,7 @@ def reviewer_node(state: AgentState) -> dict:
             new_tool_msgs = tool_result_state["messages"]
             current_messages.extend(new_tool_msgs)
             tool_names = [tc["name"] for tc in resp.tool_calls]
-            print(f"  [Reviewer 内部] 执行工具: {tool_names}")
+            logger.debug(f"  [Reviewer 内部] 执行工具: {tool_names}")
         else:
             # LLM 输出了最终结论，退出循环
             break
@@ -521,7 +513,10 @@ def reviewer_node(state: AgentState) -> dict:
         _conclusion_inner = "\n".join(lines).strip()
     is_pass = _conclusion_inner.upper().startswith("PASS")
 
-    print(f"{'✅' if is_pass else '❌'} [Node: reviewer_node] 评审结论: {conclusion[:100]}")
+    if is_pass:
+        logger.info(f"✅ [Node: reviewer_node] 评审结论: {conclusion[:100]}")
+    else:
+        logger.error(f"❌ [Node: reviewer_node] 评审结论: {conclusion[:100]}")
 
     # 更新打回次数（仅 REJECT 时递增）
     current_retries = state.get("review_retries", 0)
@@ -557,11 +552,11 @@ def coder_should_continue(
 
     if hasattr(last_message, "tool_calls") and last_message.tool_calls:
         if coder_steps >= MAX_CODER_STEPS:
-            print(f"⚠️ [Router: coder] Coder 已执行 {coder_steps} 步，达到上限，强制进入测试 → test_runner_node")
+            logger.warning(f"⚠️ [Router: coder] Coder 已执行 {coder_steps} 步，达到上限，强制进入测试 → test_runner_node")
             return "test_runner_node"
-        print("🔀 [Router: coder] 有工具调用 → tool_node")
+        logger.debug("🔀 [Router: coder] 有工具调用 → tool_node")
         return "tool_node"
-    print("🔀 [Router: coder] 编码完成 → test_runner_node")
+    logger.debug("🔀 [Router: coder] 编码完成 → test_runner_node")
     return "test_runner_node"
 
 
@@ -577,14 +572,14 @@ def reviewer_should_continue(
     retries = state.get("review_retries", 0)
 
     if review_result.upper().startswith("PASS"):
-        print("🏁 [Router: reviewer] 评审通过 → END")
+        logger.debug("🏁 [Router: reviewer] 评审通过 → END")
         return END
 
     if retries >= MAX_REVIEW_RETRIES:
-        print(f"⚠️ [Router: reviewer] 已打回 {retries} 次，强制结束 → END")
+        logger.warning(f"⚠️ [Router: reviewer] 已打回 {retries} 次，强制结束 → END")
         return END
 
-    print(f"🔄 [Router: reviewer] 评审未通过（第 {retries} 次打回） → coder_node")
+    logger.debug(f"🔄 [Router: reviewer] 评审未通过（第 {retries} 次打回） → coder_node")
     return "coder_node"
 
 
@@ -667,10 +662,10 @@ def build_graph(checkpointer=None):
         },
     )
 
-    print("📦 [Graph] 四阶段 StateGraph 构建完成，正在编译...")
+    logger.info("📦 [Graph] 四阶段 StateGraph 构建完成，正在编译...")
     compiled = graph.compile(checkpointer=checkpointer)
     cp_label = type(checkpointer).__name__ if checkpointer else "无"
-    print(f"✅ [Graph] 编译成功！Checkpointer={cp_label}  流程: START→Planner→Coder⇄Tools→TestRunner→Reviewer→END")
+    logger.info(f"✅ [Graph] 编译成功！Checkpointer={cp_label}  流程: START→Planner→Coder⇄Tools→TestRunner→Reviewer→END")
     return compiled
 
 
@@ -678,4 +673,4 @@ def build_graph(checkpointer=None):
 # server.py 在 startup 中会用 PostgresSaver 重新构建带持久化的实例。
 app = build_graph()
 # 推荐的运行时配置（recursion_limit 防止复杂任务被截断）
-APP_CONFIG = {"recursion_limit": 100}
+APP_CONFIG = {"recursion_limit": RECURSION_LIMIT}

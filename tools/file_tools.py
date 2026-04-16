@@ -16,6 +16,10 @@ from langchain_core.tools import tool
 
 from tools.workspace import resolve_workspace_path
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 # ── 测试文件保护 ─────────────────────────────
 import re
 
@@ -43,30 +47,30 @@ def read_file(file_path: str) -> str:
     Returns:
         文件内容字符串；若文件不存在或读取失败，返回描述错误的字符串。
     """
-    print(f"  [Tool: read_file] 尝试读取文件: {file_path}")
+    logger.debug(f"  [Tool: read_file] 尝试读取文件: {file_path}")
     try:
         path = resolve_workspace_path(file_path)
         if not path.exists():
             error_msg = f"[错误] 文件不存在: {file_path}"
-            print(f"  [Tool: read_file] {error_msg}")
+            logger.debug(f"  [Tool: read_file] {error_msg}")
             return error_msg
 
         if not path.is_file():
             error_msg = f"[错误] 路径存在但不是一个文件: {file_path}"
-            print(f"  [Tool: read_file] {error_msg}")
+            logger.debug(f"  [Tool: read_file] {error_msg}")
             return error_msg
 
         content = path.read_text(encoding="utf-8")
-        print(f"  [Tool: read_file] 成功读取，内容长度: {len(content)} 字符")
+        logger.debug(f"  [Tool: read_file] 成功读取，内容长度: {len(content)} 字符")
         return content
 
     except PermissionError:
         error_msg = f"[错误] 没有权限读取文件: {file_path}"
-        print(f"  [Tool: read_file] {error_msg}")
+        logger.error(f"  [Tool: read_file] {error_msg}")
         return error_msg
     except Exception as e:
         error_msg = f"[错误] 读取文件时发生未知错误: {type(e).__name__}: {e}"
-        print(f"  [Tool: read_file] {error_msg}")
+        logger.error(f"  [Tool: read_file] {error_msg}")
         return error_msg
 
 
@@ -85,7 +89,7 @@ def write_and_replace_file(file_path: str, content: str) -> str:
     Returns:
         写入成功的确认信息；若写入失败，返回描述错误的字符串。
     """
-    print(f"  [Tool: write_and_replace_file] 尝试写入文件: {file_path}")
+    logger.debug(f"  [Tool: write_and_replace_file] 尝试写入文件: {file_path}")
 
     if _is_test_file(file_path):
         msg = (
@@ -93,7 +97,7 @@ def write_and_replace_file(file_path: str, content: str) -> str:
             "你不能创建或修改任何测试文件。请调整你的源码修改方案，使其能通过现有测试。\n"
             "如果现有测试依赖旧的行为模式，请确保你的修复兼容该模式，或在源码中同时处理两种情况。"
         )
-        print(f"  [Tool: write_and_replace_file] 拒绝写入测试文件")
+        logger.warning(f"  [Tool: write_and_replace_file] 拒绝写入测试文件")
         return msg
 
     try:
@@ -106,20 +110,20 @@ def write_and_replace_file(file_path: str, content: str) -> str:
 
         # 写入后校验
         written_size = path.stat().st_size
-        print(f"  [Tool: write_and_replace_file] 写入成功，文件大小: {written_size} bytes")
+        logger.info(f"  [Tool: write_and_replace_file] 写入成功，文件大小: {written_size} bytes")
         return f"[成功] 文件已写入: {file_path}（{written_size} bytes）"
 
     except PermissionError:
         error_msg = f"[错误] 没有权限写入文件: {file_path}"
-        print(f"  [Tool: write_and_replace_file] {error_msg}")
+        logger.error(f"  [Tool: write_and_replace_file] {error_msg}")
         return error_msg
     except OSError as e:
         error_msg = f"[错误] 文件系统错误: {type(e).__name__}: {e}"
-        print(f"  [Tool: write_and_replace_file] {error_msg}")
+        logger.error(f"  [Tool: write_and_replace_file] {error_msg}")
         return error_msg
     except Exception as e:
         error_msg = f"[错误] 写入文件时发生未知错误: {type(e).__name__}: {e}"
-        print(f"  [Tool: write_and_replace_file] {error_msg}")
+        logger.error(f"  [Tool: write_and_replace_file] {error_msg}")
         return error_msg
 
 
@@ -145,7 +149,7 @@ def edit_file(file_path: str, old_string: str, new_string: str) -> str:
     Returns:
         编辑成功的确认信息；若失败，返回描述错误的字符串。
     """
-    print(f"  [Tool: edit_file] 编辑文件: {file_path}")
+    logger.debug(f"  [Tool: edit_file] 编辑文件: {file_path}")
 
     if _is_test_file(file_path):
         msg = (
@@ -153,7 +157,7 @@ def edit_file(file_path: str, old_string: str, new_string: str) -> str:
             "你不能修改任何测试文件。请调整你的源码修改方案，使其能通过现有测试。\n"
             "如果现有测试依赖旧的行为模式，请确保你的修复兼容该模式，或在源码中同时处理两种情况。"
         )
-        print(f"  [Tool: edit_file] 拒绝编辑测试文件")
+        logger.warning(f"  [Tool: edit_file] 拒绝编辑测试文件")
         return msg
 
     try:
@@ -161,12 +165,12 @@ def edit_file(file_path: str, old_string: str, new_string: str) -> str:
 
         if not path.exists():
             error_msg = f"[错误] 文件不存在: {file_path}"
-            print(f"  [Tool: edit_file] {error_msg}")
+            logger.debug(f"  [Tool: edit_file] {error_msg}")
             return error_msg
 
         if not path.is_file():
             error_msg = f"[错误] 路径不是文件: {file_path}"
-            print(f"  [Tool: edit_file] {error_msg}")
+            logger.debug(f"  [Tool: edit_file] {error_msg}")
             return error_msg
 
         content = path.read_text(encoding="utf-8")
@@ -182,7 +186,7 @@ def edit_file(file_path: str, old_string: str, new_string: str) -> str:
                 f"请确保 old_string 与文件内容完全匹配（包括缩进、空行和空白字符）。\n"
                 f"文件前 500 字符预览:\n{preview}"
             )
-            print(f"  [Tool: edit_file] old_string 未匹配")
+            logger.debug(f"  [Tool: edit_file] old_string 未匹配")
             return error_msg
 
         count = content.count(old_string)
@@ -192,21 +196,21 @@ def edit_file(file_path: str, old_string: str, new_string: str) -> str:
                 f"请在 old_string 中包含更多上下文（如前后几行代码），使其在文件中唯一匹配。\n"
                 f"如需修改多处，请对每一处分别调用 edit_file，每次提供足够的上下文来唯一定位。"
             )
-            print(f"  [Tool: edit_file] old_string 出现 {count} 次，拒绝执行")
+            logger.debug(f"  [Tool: edit_file] old_string 出现 {count} 次，拒绝执行")
             return error_msg
 
         new_content = content.replace(old_string, new_string, 1)
         path.write_text(new_content, encoding="utf-8")
 
         written_size = path.stat().st_size
-        print(f"  [Tool: edit_file] 编辑成功，文件大小: {written_size} bytes")
+        logger.info(f"  [Tool: edit_file] 编辑成功，文件大小: {written_size} bytes")
         return f"[成功] 文件已编辑: {file_path}（{written_size} bytes）"
 
     except PermissionError:
         error_msg = f"[错误] 没有权限编辑文件: {file_path}"
-        print(f"  [Tool: edit_file] {error_msg}")
+        logger.error(f"  [Tool: edit_file] {error_msg}")
         return error_msg
     except Exception as e:
         error_msg = f"[错误] 编辑文件时发生未知错误: {type(e).__name__}: {e}"
-        print(f"  [Tool: edit_file] {error_msg}")
+        logger.error(f"  [Tool: edit_file] {error_msg}")
         return error_msg

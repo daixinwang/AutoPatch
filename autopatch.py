@@ -35,8 +35,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import logging
+
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
+
+from logging_config import setup_logging
+
+logger = logging.getLogger(__name__)
 
 # 加载 .env
 load_dotenv()
@@ -136,7 +142,7 @@ def run_agent_on_issue(
     """
     # 设置工作目录（不修改全局 CWD，通过 ContextVar 传递给工具）
     _ws_token = set_workspace(working_dir)
-    print(f"\n📂 [AutoPatch] 工作目录已设置: {working_dir}")
+    logger.info(f"📂 [AutoPatch] 工作目录已设置: {working_dir}")
 
     try:
         initial_state: AgentState = {
@@ -161,19 +167,18 @@ def run_agent_on_issue(
         final_output = ""
         review_result = ""
 
-        print("\n▶️  Agent 流水线启动 (stream 模式)...\n")
-        print("─" * 60)
+        logger.info("▶️  Agent 流水线启动 (stream 模式)...")
 
         for chunk in app.stream(initial_state, config=APP_CONFIG, stream_mode="updates"):
             step_count += 1
 
             for node_name, node_output in chunk.items():
                 icon = NODE_ICONS.get(node_name, f"[{node_name}]")
-                print(f"\n[Step {step_count}] {icon}")
+                logger.info(f"[Step {step_count}] {icon}")
 
                 if "plan" in node_output and node_output["plan"]:
                     preview = node_output["plan"][:120].replace("\n", " ")
-                    print(f"  📝 plan: {preview}...")
+                    logger.debug(f"  📝 plan: {preview}...")
 
                 if "test_output" in node_output and node_output["test_output"]:
                     key_lines = [
@@ -181,25 +186,24 @@ def run_agent_on_issue(
                         if any(kw in l.upper() for kw in ["PASS", "FAIL", "ERROR", "EXIT", "OK"])
                     ]
                     summary = " | ".join(key_lines[:3]) if key_lines else node_output["test_output"][:80]
-                    print(f"  🧪 test: {summary}")
+                    logger.debug(f"  🧪 test: {summary}")
 
                 if "review_result" in node_output and node_output["review_result"]:
                     review_result = node_output["review_result"]
-                    print(f"  🏷️  review: {review_result[:100]}")
+                    logger.debug(f"  🏷️  review: {review_result[:100]}")
 
                 if "review_retries" in node_output and node_output["review_retries"]:
-                    print(f"  🔁 retries: {node_output['review_retries']}")
+                    logger.debug(f"  🔁 retries: {node_output['review_retries']}")
 
                 if "messages" in node_output:
                     for msg in node_output["messages"]:
                         role = type(msg).__name__
                         if role == "AIMessage" and not getattr(msg, "tool_calls", None):
                             preview = msg.content[:120].replace("\n", " ")
-                            print(f"  💬 {preview}...")
+                            logger.debug(f"  💬 {preview}...")
                             final_output = msg.content
 
-        print("\n" + "─" * 60)
-        print(f"✅ Agent 流水线完成，共 {step_count} 步")
+        logger.info(f"✅ Agent 流水线完成，共 {step_count} 步")
 
         return {
             "final_output": final_output,
@@ -222,60 +226,66 @@ def main() -> int:
     Returns:
         退出码（0 = 成功，1 = 失败）
     """
+    setup_logging()
+
+    from config import validate_required_env
+    try:
+        validate_required_env()
+    except EnvironmentError as e:
+        logger.error(str(e))
+        return 1
+
     parser = build_arg_parser()
     args = parser.parse_args()
 
     # ── 打印 Banner ──
-    print("═" * 65)
-    print("  🤖 AutoPatch — GitHub Issue Auto-Fix Agent")
-    print("═" * 65)
-    print(f"  仓库  : {args.repo_url}")
-    print(f"  Issue : #{args.issue_number}")
-    print(f"  输出  : {args.output_dir}")
-    print("─" * 65)
+    logger.info("🤖 AutoPatch — GitHub Issue Auto-Fix Agent")
+    logger.info(f"  仓库  : {args.repo_url}")
+    logger.info(f"  Issue : #{args.issue_number}")
+    logger.info(f"  输出  : {args.output_dir}")
 
     start_time = datetime.now()
 
     # ── Step 1: 解析仓库 URL ──
-    print("\n🔍 [1/5] 解析仓库 URL...")
+    logger.info("🔍 [1/5] 解析仓库 URL...")
     try:
         repo_info = parse_github_url(args.repo_url)
-        print(f"  ✅ 解析成功: {repo_info.full_name}")
+        logger.info(f"  ✅ 解析成功: {repo_info.full_name}")
     except ValueError as e:
-        print(f"  ❌ URL 解析失败: {e}")
+        logger.error(f"  ❌ URL 解析失败: {e}")
         return 1
 
     # ── Step 2: 拉取 Issue 内容 ──
-    print(f"\n📥 [2/5] 拉取 Issue #{args.issue_number}...")
+    logger.info(f"📥 [2/5] 拉取 Issue #{args.issue_number}...")
     client = GitHubClient()
     try:
         issue = client.fetch_issue(repo_info, args.issue_number)
         issue_text = issue.to_prompt_text()
-        print(f"  ✅ Issue 标题: {issue.title}")
-        print(f"  标签: {issue.labels or '无'} | 评论数: {len(issue.comments)}")
+        logger.info(f"  ✅ Issue 标题: {issue.title}")
+        logger.info(f"  标签: {issue.labels or '无'} | 评论数: {len(issue.comments)}")
     except Exception as e:
-        print(f"  ❌ 拉取 Issue 失败: {type(e).__name__}: {e}")
-        print("  提示: 请检查 GITHUB_TOKEN 是否已设置，以及 Issue 编号是否正确")
+        logger.error(f"  ❌ 拉取 Issue 失败: {type(e).__name__}: {e}")
+        logger.error("  提示: 请检查 GITHUB_TOKEN 是否已设置，以及 Issue 编号是否正确")
         return 1
 
     # 拉取仓库元数据（获取主要编程语言，失败不阻断流程）
     try:
         meta = client.fetch_repo_metadata(repo_info)
         repo_language = meta.get("language") or "Unknown"
-        print(f"  🔤 仓库语言: {repo_language}")
+        logger.info(f"  🔤 仓库语言: {repo_language}")
     except Exception:
         repo_language = "Unknown"
 
     # ── Step 3: Clone 仓库 ──
-    print(f"\n📦 [3/5] 准备工作区...")
+    logger.info("📦 [3/5] 准备工作区...")
 
     # 确定工作区目录和是否需要 clone
     if args.workspace_dir:
         workspace_path = Path(args.workspace_dir).resolve()
         if not workspace_path.exists():
-            print(f"  ❌ 指定的工作区目录不存在: {workspace_path}")
+            logger.error(f"  ❌ 指定的工作区目录不存在: {workspace_path}")
             return 1
-        print(f"  ✅ 使用已有工作区: {workspace_path}")
+        logger.info(f"  ✅ 使用已有工作区: {workspace_path}")
         workspace = None  # 不需要 clone，也不需要清理
     else:
         # 创建临时目录并 clone
@@ -289,14 +299,14 @@ def main() -> int:
         try:
             workspace.clone()
         except RuntimeError as e:
-            print(f"  ❌ Clone 失败: {e}")
+            logger.error(f"  ❌ Clone 失败: {e}")
             workspace.cleanup()
             return 1
 
     try:
         # ── Step 4: 运行 Agent ──
-        print(f"\n🤖 [4/5] 运行 Agent 流水线...")
-        print(f"  工作区: {workspace_path}")
+        logger.info("🤖 [4/5] 运行 Agent 流水线...")
+        logger.info(f"  工作区: {workspace_path}")
 
         agent_result = run_agent_on_issue(
             issue_text=issue_text,
@@ -305,24 +315,24 @@ def main() -> int:
         )
 
         # ── Step 5: 生成 Diff 文件 ──
-        print(f"\n📄 [5/5] 生成 Diff 文件...")
+        logger.info("📄 [5/5] 生成 Diff 文件...")
 
         # 检查变更文件
         changed = get_changed_files(str(workspace_path))
         if not changed:
-            print("  ⚠️  Agent 未对仓库文件做任何修改，跳过 diff 生成")
+            logger.warning("  ⚠️  Agent 未对仓库文件做任何修改，跳过 diff 生成")
             _print_final_report(args, issue, agent_result, diff_path=None, elapsed=datetime.now() - start_time)
             return 0
 
-        print(f"  检测到 {len(changed)} 个变更文件:")
+        logger.info(f"  检测到 {len(changed)} 个变更文件:")
         for c in changed:
-            print(f"    [{c['status']:10s}] {c['path']}")
+            logger.info(f"    [{c['status']:10s}] {c['path']}")
 
         # 生成 diff 内容
         try:
             diff_content = generate_diff(str(workspace_path))
         except RuntimeError as e:
-            print(f"  ❌ diff 生成失败: {e}")
+            logger.error(f"  ❌ diff 生成失败: {e}")
             return 1
 
         # 写入 .diff 文件
@@ -350,7 +360,7 @@ def main() -> int:
         if workspace and not args.keep_workspace:
             workspace.cleanup()
         elif workspace and args.keep_workspace:
-            print(f"\n📁 工作区已保留（--keep-workspace）: {workspace_path}")
+            logger.info(f"📁 工作区已保留（--keep-workspace）: {workspace_path}")
 
     return 0
 
@@ -363,37 +373,31 @@ def _print_final_report(
     elapsed,
 ) -> None:
     """打印最终的完整摘要报告。"""
-    print("\n" + "═" * 65)
-    print("  🎉 AutoPatch 运行完毕")
-    print("═" * 65)
-    print(f"  仓库       : {args.repo_url}")
-    print(f"  Issue      : #{args.issue_number} — {issue.title}")
-    print(f"  总步骤数   : {agent_result.get('step_count', '?')}")
-    print(f"  总耗时     : {elapsed.total_seconds():.1f} 秒")
+    logger.info("🎉 AutoPatch 运行完毕")
+    logger.info(f"  仓库       : {args.repo_url}")
+    logger.info(f"  Issue      : #{args.issue_number} — {issue.title}")
+    logger.info(f"  总步骤数   : {agent_result.get('step_count', '?')}")
+    logger.info(f"  总耗时     : {elapsed.total_seconds():.1f} 秒")
 
     review = agent_result.get("review_result", "")
     if review.upper().startswith("PASS"):
-        print(f"  评审结论   : ✅ PASS")
+        logger.info(f"  评审结论   : ✅ PASS")
     elif review.upper().startswith("REJECT"):
-        print(f"  评审结论   : ⚠️  {review[:80]}")
+        logger.warning(f"  评审结论   : ⚠️  {review[:80]}")
     else:
-        print(f"  评审结论   : {review[:80] or '未知'}")
+        logger.info(f"  评审结论   : {review[:80] or '未知'}")
 
     if diff_path:
-        print(f"  Diff 文件  : {diff_path.resolve()}")
-        print(f"\n  应用补丁命令（在目标仓库根目录执行）:")
-        print(f"  git apply {diff_path.resolve()}")
+        logger.info(f"  Diff 文件  : {diff_path.resolve()}")
+        logger.info(f"  应用补丁命令（在目标仓库根目录执行）:")
+        logger.info(f"  git apply {diff_path.resolve()}")
     else:
-        print(f"  Diff 文件  : 无（未检测到文件变更）")
+        logger.info(f"  Diff 文件  : 无（未检测到文件变更）")
 
     if agent_result.get("final_output"):
-        print(f"\n  Agent 最终报告:")
-        print("  " + "─" * 55)
+        logger.info(f"  Agent 最终报告:")
         for line in agent_result["final_output"].splitlines():
-            print(f"  {line}")
-        print("  " + "─" * 55)
-
-    print("═" * 65)
+            logger.info(f"  {line}")
 
 
 # ══════════════════════════════════════════════
@@ -404,10 +408,10 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\n\n⏹️  用户中断")
+        logger.warning("⏹️  用户中断")
         sys.exit(130)
     except Exception as e:
-        print(f"\n💥 未捕获的异常: {type(e).__name__}: {e}")
+        logger.error(f"💥 未捕获的异常: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

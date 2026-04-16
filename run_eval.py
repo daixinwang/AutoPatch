@@ -21,6 +21,7 @@ AutoPatch SWE-bench 评测 CLI 入口。
     python run_eval.py --concurrency 2 --max-instances 30
 """
 
+import logging
 import sys
 from pathlib import Path
 
@@ -32,6 +33,8 @@ if _project_root not in sys.path:
 from eval.config import EvalConfig
 from eval.runner import EvalRunner
 
+logger = logging.getLogger(__name__)
+
 
 def main() -> int:
     config = EvalConfig.from_cli()
@@ -39,16 +42,16 @@ def main() -> int:
     # 环境检查
     _check_env()
 
-    print("=" * 50)
-    print("  AutoPatch SWE-bench Evaluation")
-    print("=" * 50)
-    print(f"  Dataset       : {config.dataset_name}")
-    print(f"  Max Instances : {config.max_instances or 'all'}")
-    print(f"  Concurrency   : {config.concurrency}")
-    print(f"  Timeout/inst  : {config.timeout_per_instance}s")
-    print(f"  Results Dir   : {config.results_dir}")
-    print(f"  Resume        : {config.resume}")
-    print("=" * 50)
+    logger.info("=" * 50)
+    logger.info("  AutoPatch SWE-bench Evaluation")
+    logger.info("=" * 50)
+    logger.info(f"  Dataset       : {config.dataset_name}")
+    logger.info(f"  Max Instances : {config.max_instances or 'all'}")
+    logger.info(f"  Concurrency   : {config.concurrency}")
+    logger.info(f"  Timeout/inst  : {config.timeout_per_instance}s")
+    logger.info(f"  Results Dir   : {config.results_dir}")
+    logger.info(f"  Resume        : {config.resume}")
+    logger.info("=" * 50)
 
     runner = EvalRunner(config)
     metrics = runner.run()
@@ -68,14 +71,14 @@ def _check_env() -> None:
         missing.append("OPENAI_API_KEY")
 
     if missing:
-        print(f"[Error] 缺少环境变量: {', '.join(missing)}")
-        print("请设置后重试（可在 .env 文件中配置）")
+        logger.error(f"[Error] 缺少环境变量: {', '.join(missing)}")
+        logger.error("请设置后重试（可在 .env 文件中配置）")
         sys.exit(1)
 
     try:
         import datasets  # noqa: F401
     except ImportError:
-        print("[Error] 缺少 datasets 库，请安装: pip install datasets")
+        logger.error("[Error] 缺少 datasets 库，请安装: pip install datasets")
         sys.exit(1)
 
 

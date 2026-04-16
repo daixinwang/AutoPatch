@@ -13,8 +13,12 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import logging
+
 from eval.config import EvalConfig
 from eval.dataset import SWEBenchInstance
+
+logger = logging.getLogger(__name__)
 
 # ── Repo 特定安装配置 ──
 REPO_INSTALL_MAP: Dict[str, Dict] = {

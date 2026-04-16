@@ -13,7 +13,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
+import logging
+
 from eval.evaluator import InstanceResult
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -159,25 +163,25 @@ def save_aggregate_report(
 
 def print_summary(metrics: AggregateMetrics) -> None:
     """终端打印汇总表格。"""
-    print("\n" + "=" * 50)
-    print("  AutoPatch Evaluation Summary")
-    print("=" * 50)
-    print(f"  Total Instances     : {metrics.total_instances}")
-    print(f"  Resolved            : {metrics.resolved}")
-    print(f"  Partially Resolved  : {metrics.partially_resolved}")
-    print(f"  Failed              : {metrics.failed}")
-    print(f"  Errors              : {metrics.errors}")
-    print(f"  Timeouts            : {metrics.timeouts}")
-    print(f"  Resolve Rate        : {metrics.resolve_rate:.1%}")
-    print(f"  Avg Steps           : {metrics.avg_step_count:.1f}")
-    print(f"  Avg Time (s)        : {metrics.avg_elapsed_seconds:.1f}")
-    print(f"  Median Time (s)     : {metrics.median_elapsed_seconds:.1f}")
+    logger.info("\n" + "=" * 50)
+    logger.info("  AutoPatch Evaluation Summary")
+    logger.info("=" * 50)
+    logger.info(f"  Total Instances     : {metrics.total_instances}")
+    logger.info(f"  Resolved            : {metrics.resolved}")
+    logger.info(f"  Partially Resolved  : {metrics.partially_resolved}")
+    logger.info(f"  Failed              : {metrics.failed}")
+    logger.info(f"  Errors              : {metrics.errors}")
+    logger.info(f"  Timeouts            : {metrics.timeouts}")
+    logger.info(f"  Resolve Rate        : {metrics.resolve_rate:.1%}")
+    logger.info(f"  Avg Steps           : {metrics.avg_step_count:.1f}")
+    logger.info(f"  Avg Time (s)        : {metrics.avg_elapsed_seconds:.1f}")
+    logger.info(f"  Median Time (s)     : {metrics.median_elapsed_seconds:.1f}")
 
     if metrics.by_repo:
-        print("\n  By Repository:")
+        logger.info("\n  By Repository:")
         for repo, rm in sorted(metrics.by_repo.items()):
-            print(f"    {repo:40s} {rm.resolved}/{rm.total} ({rm.resolve_rate:.0%})")
-    print("=" * 50)
+            logger.info(f"    {repo:40s} {rm.resolved}/{rm.total} ({rm.resolve_rate:.0%})")
+    logger.info("=" * 50)
 
 
 # ── 内部 ──

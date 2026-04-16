@@ -12,6 +12,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Set
 
+import logging
+
 from eval.config import EvalConfig
 from eval.dataset import SWEBenchInstance, load_dataset
 from eval.evaluator import InstanceEvaluator, InstanceResult
@@ -22,6 +24,8 @@ from eval.metrics import (
     save_aggregate_report,
     save_instance_result,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class EvalRunner:
@@ -34,12 +38,12 @@ class EvalRunner:
 
     def run(self) -> AggregateMetrics:
         # 1. 加载数据集
-        print(f"[EvalRunner] 加载数据集: {self.config.dataset_name}")
+        logger.info(f"[EvalRunner] 加载数据集: {self.config.dataset_name}")
         instances = load_dataset(self.config)
-        print(f"[EvalRunner] 加载 {len(instances)} 个实例")
+        logger.info(f"[EvalRunner] 加载 {len(instances)} 个实例")
 
         if not instances:
-            print("[EvalRunner] 无可评测实例")
+            logger.info("[EvalRunner] 无可评测实例")
             return AggregateMetrics()
 
         # 2. 断点续跑：跳过已完成
@@ -47,8 +51,8 @@ class EvalRunner:
         remaining = [i for i in instances if i.instance_id not in completed_ids]
 
         if completed_ids:
-            print(f"[EvalRunner] 续跑模式：跳过 {len(completed_ids)} 个已完成实例")
-        print(f"[EvalRunner] 待评测: {len(remaining)} 个实例")
+            logger.info(f"[EvalRunner] 续跑模式：跳过 {len(completed_ids)} 个已完成实例")
+        logger.info(f"[EvalRunner] 待评测: {len(remaining)} 个实例")
 
         # 3. 执行评测
         if self.config.concurrency <= 1:
@@ -70,7 +74,7 @@ class EvalRunner:
         print_summary(metrics)
 
         report_path = self.results_dir / self.run_id / "report.md"
-        print(f"\n[EvalRunner] 报告已保存: {report_path}")
+        logger.info(f"\n[EvalRunner] 报告已保存: {report_path}")
 
         return metrics
 
@@ -107,7 +111,7 @@ class EvalRunner:
 
     def _evaluate_single(self, idx: int, total: int, instance: SWEBenchInstance) -> InstanceResult:
         """评测单个实例，附带进度输出和持久化。"""
-        print(f"\n[{idx}/{total}] {instance.instance_id} ...")
+        logger.info(f"\n[{idx}/{total}] {instance.instance_id} ...")
         evaluator = InstanceEvaluator(instance, self.config)
         result = evaluator.evaluate()
 
@@ -118,7 +122,7 @@ class EvalRunner:
             "error": "ERR",
             "timeout": "TIMEOUT",
         }.get(result.status, "?")
-        print(f"[{idx}/{total}] {instance.instance_id} -> {status_icon} ({result.elapsed_seconds:.0f}s)")
+        logger.info(f"[{idx}/{total}] {instance.instance_id} -> {status_icon} ({result.elapsed_seconds:.0f}s)")
 
         # 立即持久化
         save_instance_result(result, self.results_dir, self.run_id)
@@ -146,7 +150,7 @@ class EvalRunner:
                     results.append(result)
                 except Exception as e:
                     inst = futures[future]
-                    print(f"[EvalRunner] {inst.instance_id} 异常: {e}")
+                    logger.error(f"[EvalRunner] {inst.instance_id} 异常: {e}")
                     results.append(InstanceResult(
                         instance_id=inst.instance_id,
                         repo=inst.repo,

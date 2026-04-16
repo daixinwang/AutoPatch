@@ -13,10 +13,13 @@ Git diff 生成器。
   - 新建文件使用 git diff --cached（先 add 再 diff --cached）
 """
 
+import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Union
+
+logger = logging.getLogger(__name__)
 
 
 # ══════════════════════════════════════════════
@@ -45,7 +48,7 @@ def generate_diff(repo_path: Union[str, Path]) -> str:
     if not (repo / ".git").exists():
         raise RuntimeError(f"路径 {repo} 不是一个 git 仓库（找不到 .git 目录）")
 
-    print(f"  [DiffGenerator] 在 {repo} 中生成 diff...")
+    logger.info(f"  [DiffGenerator] 在 {repo} 中生成 diff...")
 
     # ── Step 1: 将未追踪的新文件加入 index（intent-to-add），使其出现在 diff 中
     _stage_new_files(repo)
@@ -54,12 +57,12 @@ def generate_diff(repo_path: Union[str, Path]) -> str:
     diff_content = _run_git_diff(repo)
 
     if not diff_content.strip():
-        print("  [DiffGenerator] ⚠️  未检测到任何文件变化")
+        logger.warning("  [DiffGenerator] ⚠️  未检测到任何文件变化")
         return ""
 
     line_count = diff_content.count("\n")
     file_count = diff_content.count("\ndiff --git") + (1 if diff_content.startswith("diff --git") else 0)
-    print(f"  [DiffGenerator] ✅ 生成 diff：{file_count} 个文件，{line_count} 行")
+    logger.info(f"  [DiffGenerator] ✅ 生成 diff：{file_count} 个文件，{line_count} 行")
     return diff_content
 
 
@@ -81,7 +84,7 @@ def _stage_new_files(repo: Path) -> None:
     untracked = [f.strip() for f in result.stdout.splitlines() if f.strip()]
 
     if untracked:
-        print(f"  [DiffGenerator] 发现 {len(untracked)} 个新文件，标记为 intent-to-add: {untracked}")
+        logger.debug(f"  [DiffGenerator] 发现 {len(untracked)} 个新文件，标记为 intent-to-add: {untracked}")
         subprocess.run(
             ["git", "add", "-N"] + untracked,
             cwd=str(repo),
@@ -190,8 +193,8 @@ def write_diff_file(
     full_content = "\n".join(header_lines) + diff_content
 
     output.write_text(full_content, encoding="utf-8")
-    print(f"✅ [DiffGenerator] Diff 文件已写入: {output}")
-    print(f"   大小: {output.stat().st_size} bytes，路径: {output.resolve()}")
+    logger.info(f"✅ [DiffGenerator] Diff 文件已写入: {output}")
+    logger.debug(f"   大小: {output.stat().st_size} bytes，路径: {output.resolve()}")
     return output
 
 
@@ -203,7 +206,7 @@ def print_diff_summary(diff_content: str) -> None:
         diff_content: unified diff 字符串
     """
     if not diff_content.strip():
-        print("  （无变更）")
+        logger.info("  （无变更）")
         return
 
     added = diff_content.count("\n+") - diff_content.count("\n+++")
@@ -213,11 +216,11 @@ def print_diff_summary(diff_content: str) -> None:
     import re
     changed_files = re.findall(r"^diff --git a/(.+?) b/", diff_content, re.MULTILINE)
 
-    print(f"\n📊 Diff 摘要:")
-    print(f"   变更文件数 : {len(changed_files)}")
-    print(f"   新增行数   : +{added}")
-    print(f"   删除行数   : -{removed}")
+    logger.info(f"📊 Diff 摘要:")
+    logger.info(f"   变更文件数 : {len(changed_files)}")
+    logger.info(f"   新增行数   : +{added}")
+    logger.info(f"   删除行数   : -{removed}")
     if changed_files:
-        print(f"   变更文件   :")
+        logger.info(f"   变更文件   :")
         for f in changed_files:
-            print(f"     • {f}")
+            logger.info(f"     • {f}")

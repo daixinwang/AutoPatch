@@ -47,10 +47,14 @@ from typing import AsyncGenerator, Optional
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+import logging
+
+from logging_config import setup_logging
 
 from github_client import GitHubClient, RepoWorkspace, parse_github_url
 from diff_generator import generate_diff, get_changed_files, write_diff_file
@@ -58,6 +62,10 @@ from agent.graph import build_graph, AgentState
 from langchain_core.messages import HumanMessage
 from tools.workspace import set_workspace, reset_workspace
 from task_store import TaskStore
+from config import MAX_CONCURRENT_PATCHES as _CFG_MAX_CONCURRENT, DB_POOL_MAX_SIZE, RECURSION_LIMIT
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 # ── FastAPI 应用初始化 ────────────────────────────────────
 
@@ -70,7 +78,7 @@ async def _lifespan(app: FastAPI):
 
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
-        print("⚠️  [server] DATABASE_URL 未设置，断点续传不可用，使用内存模式运行")
+        logger.warning("DATABASE_URL 未设置，断点续传不可用，使用内存模式运行")
         agent_app = build_graph(checkpointer=None)
     else:
         try:
@@ -79,16 +87,16 @@ async def _lifespan(app: FastAPI):
 
             pool = ConnectionPool(
                 conninfo=db_url,
-                max_size=10,
+                max_size=DB_POOL_MAX_SIZE,
                 kwargs={"autocommit": True, "prepare_threshold": 0},
                 open=True,
             )
             checkpointer = PostgresSaver(pool)
             checkpointer.setup()   # 幂等：建表（已存在则跳过）
             agent_app = build_graph(checkpointer=checkpointer)
-            print("✅ [server] PostgreSQL Checkpointer 初始化完成，断点续传已启用")
+            logger.info("PostgreSQL Checkpointer 初始化完成，断点续传已启用")
         except Exception as e:
-            print(f"⚠️  [server] Checkpointer 初始化失败（{e}），降级为内存模式")
+            logger.warning("Checkpointer 初始化失败，降级为内存模式", exc_info=True)
             agent_app = build_graph(checkpointer=None)
 
     yield   # 应用运行期间
@@ -118,8 +126,24 @@ fastapi_app.add_middleware(
 
 # 限制同时进行的 AutoPatch 流水线数量，防止资源耗尽
 # 通过环境变量 MAX_CONCURRENT_PATCHES 配置（默认 3）
-_MAX_CONCURRENT = int(os.getenv("MAX_CONCURRENT_PATCHES", "3"))
+_MAX_CONCURRENT = _CFG_MAX_CONCURRENT
 _pipeline_semaphore = asyncio.Semaphore(_MAX_CONCURRENT)
+
+# ── API 认证 ──────────────────────────────────────────────
+# 设置 AUTOPATCH_API_KEY 环境变量启用 Bearer token 认证。
+# 未设置时允许所有请求（开发模式），启动时打印警告。
+_API_KEY = os.getenv("AUTOPATCH_API_KEY", "")
+if not _API_KEY:
+    logger.warning("AUTOPATCH_API_KEY 未设置，API 端点无认证保护（仅限开发环境）")
+
+
+async def _verify_api_key(request: Request) -> None:
+    """FastAPI 依赖：校验 Authorization: Bearer <key>。"""
+    if not _API_KEY:
+        return  # 未配置 API Key，跳过认证（开发模式）
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer ") or auth[7:] != _API_KEY:
+        raise HTTPException(status_code=401, detail="未授权：无效的 API Key")
 
 # ── 全局有状态对象（在 startup 中初始化）────────────────────
 # agent_app: 带 PostgresSaver checkpointer 的 LangGraph 实例
@@ -185,7 +209,165 @@ def result_event(diff: str, review_result: str, step_count: int, changed_files: 
 
 def _make_task_config(task_id: str) -> dict:
     """构造带 thread_id 的 LangGraph 运行配置（用于 checkpoint 索引）。"""
-    return {"recursion_limit": 100, "configurable": {"thread_id": task_id}}
+    return {"recursion_limit": RECURSION_LIMIT, "configurable": {"thread_id": task_id}}
+
+
+def _start_agent_stream(
+    input_state,
+    task_config: dict,
+    queue: asyncio.Queue,
+    loop: asyncio.AbstractEventLoop,
+) -> None:
+    """在后台线程中运行 LangGraph stream，把每个 chunk 放入队列。
+
+    input_state=None 时从 checkpoint 恢复。
+    必须在 copy_context().run() 中调用以继承 workspace ContextVar。
+    """
+    import threading
+
+    def _run():
+        try:
+            for chunk in agent_app.stream(
+                input_state,
+                config=task_config,
+                stream_mode=["updates", "messages"],
+            ):
+                loop.call_soon_threadsafe(queue.put_nowait, chunk)
+            loop.call_soon_threadsafe(queue.put_nowait, None)
+        except Exception as e:
+            loop.call_soon_threadsafe(queue.put_nowait, e)
+
+    ctx = contextvars.copy_context()
+    thread = threading.Thread(target=ctx.run, args=(_run,), daemon=True)
+    thread.start()
+
+
+async def _consume_agent_stream(
+    queue: asyncio.Queue,
+    active_nodes: set[str],
+) -> AsyncGenerator[tuple[str, int, str], None]:
+    """消费 LangGraph stream 队列，生成 SSE 事件。
+
+    Yields:
+        (sse_str, step_count_delta, review_result_update) 三元组。
+        step_count_delta 仅在 updates 模式时为 1，其余为 0。
+        review_result_update 非空时为最新评审结果。
+    """
+    while True:
+        chunk = await queue.get()
+
+        if chunk is None:
+            break
+
+        if isinstance(chunk, Exception):
+            yield log_event(f"Agent 运行异常: {chunk}", "error"), 0, ""
+            yield sse_event({"type": "error", "message": str(chunk)}), 0, ""
+            return
+
+        mode, data = chunk
+
+        # ── messages 模式：token 级流式块 ────────────────
+        if mode == "messages":
+            msg_chunk, metadata = data
+            node_name = metadata.get("langgraph_node", "")
+            node_id = NODE_ID_MAP.get(node_name, node_name)
+            content = getattr(msg_chunk, "content", "")
+            if content and isinstance(content, str):
+                yield token_event(node_id, content), 0, ""
+            await asyncio.sleep(0)
+            continue
+
+        # ── updates 模式：节点级状态更新 ─────────────────
+        review_update = ""
+
+        for node_name, node_output in data.items():
+            node_id = NODE_ID_MAP.get(node_name, node_name)
+
+            if node_id not in active_nodes and node_name != "tool_node":
+                active_nodes.add(node_id)
+                yield node_event(node_id, "running"), 0, ""
+
+            display = node_name.replace("_node", "").replace("_", " ").title()
+
+            if "plan" in node_output and node_output["plan"]:
+                preview = node_output["plan"][:200].replace("\n", " ")
+                yield log_event(f"执行计划已生成: {preview}...", "success", "Planner"), 0, ""
+                yield node_event("planner", "done"), 0, ""
+
+            if "test_output" in node_output and node_output["test_output"]:
+                key_lines = [
+                    l for l in node_output["test_output"].splitlines()
+                    if any(kw in l.upper() for kw in ["PASS", "FAIL", "ERROR", "EXIT", "OK"])
+                ]
+                summary = " | ".join(key_lines[:3]) if key_lines else node_output["test_output"][:120]
+                yield log_event(f"测试结果: {summary}", "success", "TestRunner"), 0, ""
+                yield node_event("testrunner", "done"), 0, ""
+
+            if "review_result" in node_output and node_output["review_result"]:
+                review_update = node_output["review_result"]
+                is_pass = review_update.upper().startswith("PASS")
+                level = "success" if is_pass else "warn"
+                yield log_event(f"评审结论: {review_update[:120]}", level, "Reviewer"), 0, ""
+                retries = node_output.get("review_retries", 0)
+                if is_pass:
+                    yield node_event("reviewer", "done"), 0, ""
+                elif retries and retries > 0:
+                    yield node_event("coder", "retrying", f"第 {retries} 次打回"), 0, ""
+                    yield node_event("reviewer", "retrying", f"第 {retries} 次打回"), 0, ""
+
+            if "messages" in node_output:
+                for msg in node_output["messages"]:
+                    msg_type = type(msg).__name__
+                    if msg_type == "AIMessage" and hasattr(msg, "tool_calls") and msg.tool_calls:
+                        for tc in msg.tool_calls:
+                            args_preview = ", ".join(
+                                f"{k}={str(v)[:40]!r}" for k, v in (tc.get("args") or {}).items()
+                            )
+                            yield log_event(
+                                f"调用工具: {tc['name']}({args_preview})",
+                                "tool",
+                                display,
+                            ), 0, ""
+                    elif msg_type == "AIMessage" and not getattr(msg, "tool_calls", None):
+                        if msg.content and len(msg.content) > 0:
+                            preview = str(msg.content)[:150].replace("\n", " ")
+                            yield log_event(preview, "info", display), 0, ""
+                            if node_id not in ("coder",):
+                                yield node_event(node_id, "done"), 0, ""
+
+        yield "", 1, review_update  # step_count += 1 信号
+        await asyncio.sleep(0)
+
+
+async def _generate_and_save_diff(
+    tmp_dir: str,
+    issue_number: int,
+    repo_url: str,
+    review_result: str,
+) -> tuple[str, list[str]]:
+    """生成 diff 并保存到 patches/ 目录，返回 (diff_content, changed_files)。"""
+    loop = asyncio.get_running_loop()
+
+    try:
+        diff_content = await loop.run_in_executor(None, generate_diff, tmp_dir)
+    except RuntimeError as e:
+        diff_content = ""
+        logger.warning("Diff 生成失败: %s", e)
+
+    changed_files_raw = await loop.run_in_executor(None, get_changed_files, tmp_dir)
+    changed_files = [c["path"] for c in changed_files_raw]
+
+    if diff_content.strip():
+        from datetime import datetime
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        diff_path = Path("patches") / f"issue-{issue_number}_{ts}.diff"
+        await loop.run_in_executor(
+            None, write_diff_file, diff_content, diff_path,
+            repo_url, issue_number, review_result,
+        )
+        logger.info("Diff 已保存: %s", diff_path)
+
+    return diff_content, changed_files
 
 
 async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
@@ -306,173 +488,30 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
         review_result = ""
         active_nodes: set[str] = set()
 
-        # LangGraph stream 是同步的，用 run_in_executor 跑在线程中
-        # 通过队列桥接同步迭代和异步 yield
         queue: asyncio.Queue = asyncio.Queue()
         loop = asyncio.get_running_loop()
+        _start_agent_stream(initial_state, task_config, queue, loop)
 
-        def stream_in_thread():
-            """在线程中运行 LangGraph stream，把每个 chunk 放入队列。
+        async for sse_str, delta, rev_update in _consume_agent_stream(queue, active_nodes):
+            step_count += delta
+            if rev_update:
+                review_result = rev_update
+            if sse_str:
+                yield sse_str
 
-            stream_mode=["updates", "messages"] 同时启用两种模式：
-              - updates : 节点级状态更新（{node_name: node_output}）
-              - messages: token 级流式块（(AIMessageChunk, metadata)）
-            每个 chunk 为 (mode, data) 元组。
-            """
-            try:
-                for chunk in agent_app.stream(
-                    initial_state,
-                    config=task_config,
-                    stream_mode=["updates", "messages"],
-                ):
-                    loop.call_soon_threadsafe(queue.put_nowait, chunk)
-                loop.call_soon_threadsafe(queue.put_nowait, None)  # 结束信号
-            except Exception as e:
-                loop.call_soon_threadsafe(queue.put_nowait, e)
-
-        # 将当前 asyncio Task 的 ContextVar 快照传递给后台线程，
-        # 确保工具读取到正确的 workspace_dir（而非其他并发请求的目录）
-        import threading
-        ctx = contextvars.copy_context()
-        thread = threading.Thread(target=ctx.run, args=(stream_in_thread,), daemon=True)
-        thread.start()
-
-        # 从队列消费事件并 yield SSE
-        while True:
-            chunk = await queue.get()
-
-            # 结束信号
-            if chunk is None:
-                break
-
-            # 异常
-            if isinstance(chunk, Exception):
-                yield log_event(f"Agent 运行异常: {chunk}", "error")
-                yield sse_event({"type": "error", "message": str(chunk)})
-                return
-
-            # chunk 为 (mode, data) 元组
-            mode, data = chunk
-
-            # ── messages 模式：token 级流式块 ────────────────
-            if mode == "messages":
-                msg_chunk, metadata = data
-                node_name = metadata.get("langgraph_node", "")
-                node_id = NODE_ID_MAP.get(node_name, node_name)
-                content = getattr(msg_chunk, "content", "")
-                # 只推送文本 token，跳过工具调用 chunk（content 为空）
-                if content and isinstance(content, str):
-                    yield token_event(node_id, content)
-                await asyncio.sleep(0)
-                continue
-
-            # ── updates 模式：节点级状态更新 ─────────────────
-            step_count += 1
-
-            for node_name, node_output in data.items():
-                node_id = NODE_ID_MAP.get(node_name, node_name)
-
-                # 节点进入 running 状态（首次出现）
-                if node_id not in active_nodes and node_name != "tool_node":
-                    active_nodes.add(node_id)
-                    yield node_event(node_id, "running")
-
-                # ── 解析节点输出，生成日志事件 ──
-                display = node_name.replace("_node", "").replace("_", " ").title()
-
-                if "plan" in node_output and node_output["plan"]:
-                    preview = node_output["plan"][:200].replace("\n", " ")
-                    yield log_event(f"执行计划已生成: {preview}...", "success", "Planner")
-                    yield node_event("planner", "done")
-
-                if "test_output" in node_output and node_output["test_output"]:
-                    # 提取关键行
-                    key_lines = [
-                        l for l in node_output["test_output"].splitlines()
-                        if any(kw in l.upper() for kw in ["PASS", "FAIL", "ERROR", "EXIT", "OK"])
-                    ]
-                    summary = " | ".join(key_lines[:3]) if key_lines else node_output["test_output"][:120]
-                    yield log_event(f"测试结果: {summary}", "success", "TestRunner")
-                    yield node_event("testrunner", "done")
-
-                if "review_result" in node_output and node_output["review_result"]:
-                    review_result = node_output["review_result"]
-                    is_pass = review_result.upper().startswith("PASS")
-                    level = "success" if is_pass else "warn"
-                    yield log_event(f"评审结论: {review_result[:120]}", level, "Reviewer")
-                    retries = node_output.get("review_retries", 0)
-                    if is_pass:
-                        yield node_event("reviewer", "done")
-                    elif retries and retries > 0:
-                        yield node_event("coder", "retrying", f"第 {retries} 次打回")
-                        yield node_event("reviewer", "retrying", f"第 {retries} 次打回")
-
-                # 解析 messages 中的工具调用和 AI 消息
-                if "messages" in node_output:
-                    for msg in node_output["messages"]:
-                        msg_type = type(msg).__name__
-                        # 工具调用日志
-                        if msg_type == "AIMessage" and hasattr(msg, "tool_calls") and msg.tool_calls:
-                            for tc in msg.tool_calls:
-                                args_preview = ", ".join(
-                                    f"{k}={str(v)[:40]!r}" for k, v in (tc.get("args") or {}).items()
-                                )
-                                yield log_event(
-                                    f"调用工具: {tc['name']}({args_preview})",
-                                    "tool",
-                                    display,
-                                )
-                        # AI 完成消息（非工具调用）
-                        elif msg_type == "AIMessage" and not getattr(msg, "tool_calls", None):
-                            if msg.content and len(msg.content) > 0:
-                                preview = str(msg.content)[:150].replace("\n", " ")
-                                yield log_event(preview, "info", display)
-                                # 标记节点完成
-                                if node_id not in ("coder",):  # coder 在 test/review 后才算完成
-                                    yield node_event(node_id, "done")
-
-            await asyncio.sleep(0)  # 让出事件循环，保持响应性
-
-        # 标记 coder 完成（若未被标记）
-        if "coder" not in active_nodes or True:
-            yield node_event("coder", "done")
+        yield node_event("coder", "done")
 
         # ── Step 5: 生成 Diff ────────────────────────────
         yield log_event("正在生成 diff 补丁...", "info")
-
-        try:
-            diff_content = await asyncio.get_running_loop().run_in_executor(
-                None, generate_diff, tmp_dir
-            )
-        except RuntimeError as e:
-            diff_content = ""
-            yield log_event(f"Diff 生成失败: {e}", "warn")
-
-        changed_files_raw = await asyncio.get_running_loop().run_in_executor(
-            None, get_changed_files, tmp_dir
+        diff_content, changed_files = await _generate_and_save_diff(
+            tmp_dir, req.issueNumber, repo_info.clone_url, review_result,
         )
-        changed_files = [c["path"] for c in changed_files_raw]
-
-        # 写入 patches/ 目录
         if diff_content.strip():
-            from datetime import datetime
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            diff_path = Path("patches") / f"issue-{req.issueNumber}_{ts}.diff"
-            await asyncio.get_running_loop().run_in_executor(
-                None,
-                write_diff_file,
-                diff_content,
-                diff_path,
-                repo_info.clone_url,
-                req.issueNumber,
-                review_result,
-            )
-            yield log_event(f"✅ Diff 已保存: {diff_path}", "success")
+            yield log_event(f"✅ Diff 已保存", "success")
 
         elapsed_ms = int(time.time() * 1000) - start_ms
         yield log_event(f"🎉 流水线完成！耗时 {elapsed_ms / 1000:.1f}s", "system")
 
-        # 推送最终结果
         yield result_event(
             diff=diff_content,
             review_result=review_result,
@@ -482,6 +521,7 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
         completed = True
 
     except Exception as e:
+        logger.error("流水线异常", exc_info=True)
         yield log_event(f"流水线异常: {type(e).__name__}: {e}", "error")
         yield sse_event({"type": "error", "message": str(e)})
 
@@ -580,138 +620,25 @@ async def resume_pipeline(task_id: str) -> AsyncGenerator[str, None]:
 
         queue: asyncio.Queue = asyncio.Queue()
         loop = asyncio.get_running_loop()
+        _start_agent_stream(None, task_config, queue, loop)  # None = 从 checkpoint 恢复
 
-        def stream_in_thread():
-            """传 None 让 LangGraph 从最后 checkpoint 恢复，不重新执行已完成节点。"""
-            try:
-                for chunk in agent_app.stream(
-                    None,              # ← None = 从 checkpoint 恢复
-                    config=task_config,
-                    stream_mode=["updates", "messages"],
-                ):
-                    loop.call_soon_threadsafe(queue.put_nowait, chunk)
-                loop.call_soon_threadsafe(queue.put_nowait, None)
-            except Exception as e:
-                loop.call_soon_threadsafe(queue.put_nowait, e)
-
-        import threading
-        ctx = contextvars.copy_context()
-        thread = threading.Thread(target=ctx.run, args=(stream_in_thread,), daemon=True)
-        thread.start()
-
-        # ── SSE 消费循环（与 run_pipeline 相同逻辑）─────────
-        while True:
-            chunk = await queue.get()
-            if chunk is None:
-                break
-            if isinstance(chunk, Exception):
-                yield log_event(f"Agent 运行异常: {chunk}", "error")
-                yield sse_event({"type": "error", "message": str(chunk)})
-                return
-
-            mode, data = chunk
-
-            if mode == "messages":
-                msg_chunk, metadata = data
-                node_name = metadata.get("langgraph_node", "")
-                node_id = NODE_ID_MAP.get(node_name, node_name)
-                content = getattr(msg_chunk, "content", "")
-                if content and isinstance(content, str):
-                    yield token_event(node_id, content)
-                await asyncio.sleep(0)
-                continue
-
-            step_count += 1
-
-            for node_name, node_output in data.items():
-                node_id = NODE_ID_MAP.get(node_name, node_name)
-
-                if node_id not in active_nodes and node_name != "tool_node":
-                    active_nodes.add(node_id)
-                    yield node_event(node_id, "running")
-
-                display = node_name.replace("_node", "").replace("_", " ").title()
-
-                if "plan" in node_output and node_output["plan"]:
-                    preview = node_output["plan"][:200].replace("\n", " ")
-                    yield log_event(f"执行计划已生成: {preview}...", "success", "Planner")
-                    yield node_event("planner", "done")
-
-                if "test_output" in node_output and node_output["test_output"]:
-                    key_lines = [
-                        l for l in node_output["test_output"].splitlines()
-                        if any(kw in l.upper() for kw in ["PASS", "FAIL", "ERROR", "EXIT", "OK"])
-                    ]
-                    summary = " | ".join(key_lines[:3]) if key_lines else node_output["test_output"][:120]
-                    yield log_event(f"测试结果: {summary}", "success", "TestRunner")
-                    yield node_event("testrunner", "done")
-
-                if "review_result" in node_output and node_output["review_result"]:
-                    review_result = node_output["review_result"]
-                    is_pass = review_result.upper().startswith("PASS")
-                    level = "success" if is_pass else "warn"
-                    yield log_event(f"评审结论: {review_result[:120]}", level, "Reviewer")
-                    retries = node_output.get("review_retries", 0)
-                    if is_pass:
-                        yield node_event("reviewer", "done")
-                    elif retries and retries > 0:
-                        yield node_event("coder", "retrying", f"第 {retries} 次打回")
-                        yield node_event("reviewer", "retrying", f"第 {retries} 次打回")
-
-                if "messages" in node_output:
-                    for msg in node_output["messages"]:
-                        msg_type = type(msg).__name__
-                        if msg_type == "AIMessage" and hasattr(msg, "tool_calls") and msg.tool_calls:
-                            for tc in msg.tool_calls:
-                                args_preview = ", ".join(
-                                    f"{k}={str(v)[:40]!r}" for k, v in (tc.get("args") or {}).items()
-                                )
-                                yield log_event(
-                                    f"调用工具: {tc['name']}({args_preview})",
-                                    "tool",
-                                    display,
-                                )
-                        elif msg_type == "AIMessage" and not getattr(msg, "tool_calls", None):
-                            if msg.content and len(msg.content) > 0:
-                                preview = str(msg.content)[:150].replace("\n", " ")
-                                yield log_event(preview, "info", display)
-                                if node_id not in ("coder",):
-                                    yield node_event(node_id, "done")
-
-            await asyncio.sleep(0)
+        async for sse_str, delta, rev_update in _consume_agent_stream(queue, active_nodes):
+            step_count += delta
+            if rev_update:
+                review_result = rev_update
+            if sse_str:
+                yield sse_str
 
         yield node_event("coder", "done")
 
         # ── 生成 Diff ─────────────────────────────────────
         yield log_event("正在生成 diff 补丁...", "info")
-
-        try:
-            diff_content = await asyncio.get_running_loop().run_in_executor(
-                None, generate_diff, tmp_dir
-            )
-        except RuntimeError as e:
-            diff_content = ""
-            yield log_event(f"Diff 生成失败: {e}", "warn")
-
-        changed_files_raw = await asyncio.get_running_loop().run_in_executor(
-            None, get_changed_files, tmp_dir
+        diff_content, changed_files = await _generate_and_save_diff(
+            tmp_dir, record.issue_number,
+            f"https://github.com/{record.repo_url}.git", review_result,
         )
-        changed_files = [c["path"] for c in changed_files_raw]
-
         if diff_content.strip():
-            from datetime import datetime
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            diff_path = Path("patches") / f"issue-{record.issue_number}_{ts}.diff"
-            await asyncio.get_running_loop().run_in_executor(
-                None,
-                write_diff_file,
-                diff_content,
-                diff_path,
-                f"https://github.com/{record.repo_url}.git",
-                record.issue_number,
-                review_result,
-            )
-            yield log_event(f"✅ Diff 已保存: {diff_path}", "success")
+            yield log_event(f"✅ Diff 已保存", "success")
 
         elapsed_ms = int(time.time() * 1000) - start_ms
         yield log_event(f"🎉 续传流水线完成！耗时 {elapsed_ms / 1000:.1f}s", "system")
@@ -725,6 +652,7 @@ async def resume_pipeline(task_id: str) -> AsyncGenerator[str, None]:
         completed = True
 
     except Exception as e:
+        logger.error("续传流水线异常", exc_info=True)
         yield log_event(f"续传流水线异常: {type(e).__name__}: {e}", "error")
         yield sse_event({"type": "error", "message": str(e)})
 
@@ -756,7 +684,7 @@ _SSE_HEADERS = {
 }
 
 
-@fastapi_app.post("/api/patch")
+@fastapi_app.post("/api/patch", dependencies=[Depends(_verify_api_key)])
 async def patch_endpoint(req: PatchRequest):
     """
     启动 AutoPatch 流水线，以 SSE 流式推送进度和结果。
@@ -771,7 +699,7 @@ async def patch_endpoint(req: PatchRequest):
     )
 
 
-@fastapi_app.post("/api/patch/resume")
+@fastapi_app.post("/api/patch/resume", dependencies=[Depends(_verify_api_key)])
 async def resume_endpoint(req: ResumeRequest):
     """
     恢复被中断的 AutoPatch 任务，从最后完成的节点继续执行。
@@ -793,7 +721,7 @@ async def list_tasks_endpoint():
     return {"tasks": [r.to_dict() for r in task_store.list_all()]}
 
 
-@fastapi_app.delete("/api/tasks/{task_id}")
+@fastapi_app.delete("/api/tasks/{task_id}", dependencies=[Depends(_verify_api_key)])
 async def delete_task_endpoint(task_id: str):
     """
     删除任务记录，同时删除对应的 workspace 目录（释放磁盘空间）。

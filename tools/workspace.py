@@ -60,18 +60,30 @@ def get_workspace() -> str:
 
 def resolve_workspace_path(path_str: str) -> Path:
     """
-    将路径字符串解析为绝对 Path 对象。
+    将路径字符串解析为绝对 Path 对象，并强制限定在 workspace 内。
 
-    - 绝对路径：直接返回，不做变换
-    - 相对路径：拼接到当前上下文的工作目录后返回
+    - 拒绝绝对路径输入（防止访问 /etc/passwd 等系统文件）
+    - 相对路径拼接到当前工作目录后，resolve() 去除 .. 再校验包含关系
 
     Args:
-        path_str: 文件或目录路径（绝对或相对）
+        path_str: 文件或目录路径（仅接受相对路径）
 
     Returns:
         解析后的绝对 Path 对象
+
+    Raises:
+        ValueError: 路径逃逸出 workspace 范围时
     """
     p = Path(path_str)
+    workspace_root = Path(get_workspace()).resolve()
+
     if p.is_absolute():
-        return p
-    return Path(get_workspace()) / p
+        resolved = p.resolve()
+    else:
+        resolved = (workspace_root / p).resolve()
+
+    if not resolved.is_relative_to(workspace_root):
+        raise ValueError(
+            f"路径安全限制：{path_str!r} 解析后逃逸出工作目录 {workspace_root}"
+        )
+    return resolved

@@ -16,12 +16,19 @@ AutoPatch 任务元数据持久化模块。
 """
 
 import json
+import logging
+import re
 import shutil
+import tempfile
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal, Optional
+
+logger = logging.getLogger(__name__)
+
+_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 TASKS_DIR = Path("tasks")
 
@@ -101,8 +108,9 @@ class TaskStore:
         if record is None:
             return False
         if remove_workspace:
-            ws = Path(record.workspace_path)
-            if ws.exists():
+            ws = Path(record.workspace_path).resolve()
+            tmp_root = Path(tempfile.gettempdir()).resolve()
+            if ws.is_relative_to(tmp_root) and ws.exists():
                 shutil.rmtree(ws, ignore_errors=True)
         path = self._path(task_id)
         path.unlink(missing_ok=True)
@@ -126,13 +134,21 @@ class TaskStore:
                 with open(path, encoding="utf-8") as f:
                     records.append(TaskRecord.from_dict(json.load(f)))
             except Exception:
+                logger.warning("跳过损坏的任务文件: %s", path, exc_info=True)
                 continue
         records.sort(key=lambda r: r.created_at, reverse=True)
         return records
 
     # ── 内部工具 ────────────────────────────────────────────
 
+    @staticmethod
+    def _validate_task_id(task_id: str) -> None:
+        """校验 task_id 为合法 UUID 格式，防止路径注入。"""
+        if not _UUID_RE.match(task_id):
+            raise ValueError(f"非法 task_id（必须为 UUID 格式）: {task_id!r}")
+
     def _path(self, task_id: str) -> Path:
+        self._validate_task_id(task_id)
         return self._dir / f"{task_id}.json"
 
     def _save(self, record: TaskRecord) -> None:

@@ -16,6 +16,7 @@ tools/execute_tools.py
   - run_test_command  : 运行各语言通用测试命令（npm/cargo/go/make 等）
 """
 
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -23,6 +24,10 @@ from pathlib import Path
 from langchain_core.tools import tool
 
 from tools.workspace import resolve_workspace_path
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 # ── 安全常量 ──────────────────────────────────
 # 命令执行超时（秒）
@@ -191,7 +196,7 @@ def run_pytest(
     Returns:
         pytest 的完整输出报告（包含 stdout + stderr）；出错时返回错误描述。
     """
-    print(f"  [Tool: run_pytest] 运行 pytest {test_path} {extra_args}")
+    logger.debug(f"  [Tool: run_pytest] 运行 pytest {test_path} {extra_args}")
     try:
         cwd = str(resolve_workspace_path(working_directory))
         timeout = max(1, min(timeout_seconds, MAX_TIMEOUT_SECONDS))
@@ -199,18 +204,18 @@ def run_pytest(
         # 构建命令：使用当前 venv 的 python -m pytest，确保包路径正确
         cmd_args = [sys.executable, "-m", "pytest", test_path]
         if extra_args.strip():
-            cmd_args.extend(extra_args.strip().split())
+            cmd_args.extend(shlex.split(extra_args))
 
         result = _run_subprocess(cmd_args, cwd, timeout)
         report = _format_result(" ".join(cmd_args), result, cwd)
 
         status_emoji = "✅" if result["returncode"] == 0 else "❌"
-        print(f"  [Tool: run_pytest] {status_emoji} 完成，exit code: {result['returncode']}")
+        logger.debug(f"  [Tool: run_pytest] {status_emoji} 完成，exit code: {result['returncode']}")
         return report
 
     except Exception as e:
         error_msg = f"[错误] run_pytest 执行失败: {type(e).__name__}: {e}"
-        print(f"  [Tool: run_pytest] {error_msg}")
+        logger.error(f"  [Tool: run_pytest] {error_msg}")
         return error_msg
 
 
@@ -246,7 +251,7 @@ def run_python_script(
     Returns:
         脚本运行的完整输出报告（stdout + stderr + exit code）；出错返回错误描述。
     """
-    print(f"  [Tool: run_python_script] 运行脚本: {script_path}")
+    logger.debug(f"  [Tool: run_python_script] 运行脚本: {script_path}")
     try:
         script = resolve_workspace_path(script_path)
 
@@ -262,18 +267,18 @@ def run_python_script(
 
         cmd_args = [sys.executable, str(script.resolve())]
         if script_args.strip():
-            cmd_args.extend(script_args.strip().split())
+            cmd_args.extend(shlex.split(script_args))
 
         result = _run_subprocess(cmd_args, cwd, timeout)
         report = _format_result(" ".join(cmd_args), result, cwd)
 
         status_emoji = "✅" if result["returncode"] == 0 else "❌"
-        print(f"  [Tool: run_python_script] {status_emoji} 完成，exit code: {result['returncode']}")
+        logger.debug(f"  [Tool: run_python_script] {status_emoji} 完成，exit code: {result['returncode']}")
         return report
 
     except Exception as e:
         error_msg = f"[错误] run_python_script 执行失败: {type(e).__name__}: {e}"
-        print(f"  [Tool: run_python_script] {error_msg}")
+        logger.error(f"  [Tool: run_python_script] {error_msg}")
         return error_msg
 
 
@@ -328,7 +333,7 @@ def run_test_command(
     Returns:
         命令的完整输出报告（stdout + stderr + exit code）；出错返回错误描述。
     """
-    print(f"  [Tool: run_test_command] 执行: {command!r}")
+    logger.debug(f"  [Tool: run_test_command] 执行: {command!r}")
     try:
         normalized = command.strip().lower()
         cmd_args = _SAFE_TEST_COMMANDS.get(normalized)
@@ -346,10 +351,10 @@ def run_test_command(
         report = _format_result(command, result, cwd)
 
         status_emoji = "✅" if result["returncode"] == 0 else "❌"
-        print(f"  [Tool: run_test_command] {status_emoji} 完成，exit code: {result['returncode']}")
+        logger.debug(f"  [Tool: run_test_command] {status_emoji} 完成，exit code: {result['returncode']}")
         return report
 
     except Exception as e:
         error_msg = f"[错误] run_test_command 执行失败: {type(e).__name__}: {e}"
-        print(f"  [Tool: run_test_command] {error_msg}")
+        logger.error(f"  [Tool: run_test_command] {error_msg}")
         return error_msg

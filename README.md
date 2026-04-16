@@ -35,6 +35,9 @@ AutoPatch is an intelligent code repair system built on [LangGraph](https://gith
 - 📄 **Standard `.diff` output** — Apply with `git apply`, no manual editing required
 - 🌊 **Real-time token streaming** — LLM output streams character-by-character in the terminal window
 - 🖥️ **Modern Web Dashboard** — Real-time agent workflow visualizer + live streaming terminal
+- 🔐 **API Authentication** — Optional Bearer token authentication for all mutation endpoints
+- 🐳 **Docker Support** — One-command deployment with `docker-compose up`
+- ✅ **Test Suite** — 31 unit/integration tests covering core modules
 
 ### 🏗️ Architecture
 
@@ -65,22 +68,37 @@ START
 AutoPatch/
 ├── autopatch.py          # CLI entry point — full end-to-end pipeline
 ├── main.py               # Debug entry — run with hardcoded test issue
+├── server.py             # FastAPI backend — SSE streaming + checkpoint resume
+├── config.py             # Centralized configuration (env-var overridable)
+├── logging_config.py     # Structured logging setup
 ├── github_client.py      # GitHub REST API client + repo clone manager
 ├── diff_generator.py     # git diff generator → writes .diff files
+├── task_store.py         # Task metadata persistence (JSON-based)
 │
 ├── agent/
 │   └── graph.py          # LangGraph StateGraph — all nodes & routing
 │
 ├── tools/
-│   ├── workspace.py      # Thread-safe workspace dir (ContextVar, concurrency-safe)
-│   ├── file_tools.py     # read_file / write_and_replace_file
+│   ├── workspace.py      # Thread-safe workspace dir (ContextVar, path-traversal protected)
+│   ├── file_tools.py     # read_file / write_and_replace_file / edit_file
 │   ├── search_tools.py   # list_directory / search_codebase / find_definition / grep_in_file
 │   └── execute_tools.py  # run_pytest / run_python_script / run_test_command (sandboxed)
 │
-└── frontend/             # React 18 + TypeScript + Vite dashboard
-    └── src/
-        ├── components/   # Header / InputSection / WorkflowVisualizer / TerminalWindow / ResultArea
-        └── hooks/        # usePatchTask — SSE state machine + token streaming
+├── tests/                # pytest test suite (31 tests)
+│   ├── conftest.py       # Shared fixtures (tmp_workspace, sample_repo)
+│   ├── test_workspace.py # Path traversal prevention tests
+│   ├── test_file_tools.py
+│   ├── test_github_client.py
+│   ├── test_task_store.py
+│   └── test_server.py    # API endpoint + auth tests
+│
+├── eval/                 # SWE-bench evaluation framework
+├── frontend/             # React 18 + TypeScript + Vite dashboard
+│
+├── Dockerfile            # Multi-stage build (Node frontend + Python backend)
+├── docker-compose.yml    # app + PostgreSQL one-command deployment
+├── pyproject.toml        # Project metadata, dev deps, tool config
+└── requirements.txt      # Production dependencies
 ```
 
 ### 🚀 Quick Start
@@ -125,24 +143,39 @@ OPENAI_BASE_URL=https://your-proxy/v1     # If using a proxy
 # Server options
 CORS_ORIGINS=http://localhost:5173        # Comma-separated allowed origins (default: localhost dev ports)
 MAX_CONCURRENT_PATCHES=3                  # Max simultaneous pipeline runs (default: 3)
+AUTOPATCH_API_KEY=your-secret-key         # Optional: enable Bearer token auth for API endpoints
+LOG_LEVEL=INFO                            # Logging level: DEBUG / INFO / WARNING / ERROR
+
+# Agent tuning (optional)
+MAX_REVIEW_RETRIES=3                      # Max reviewer reject-and-retry cycles (default: 3)
+MAX_CODER_STEPS=25                        # Max tool calls per coder attempt (default: 25)
 ```
 
 #### 3. Run
 
-**Option A — CLI (full pipeline):**
+**Option A — Docker (recommended):**
+
+```bash
+# Starts backend + PostgreSQL (checkpoint resume enabled)
+docker-compose up --build
+
+# Browser: http://localhost:8000
+```
+
+**Option B — CLI (full pipeline):**
 
 ```bash
 source .venv/bin/activate
 python autopatch.py https://github.com/owner/repo 42
 ```
 
-**Option B — Debug mode (hardcoded test issue):**
+**Option C — Debug mode (hardcoded test issue):**
 
 ```bash
 python main.py
 ```
 
-**Option C — Web Dashboard:**
+**Option D — Web Dashboard (manual):**
 
 ```bash
 # Terminal 1: start backend
@@ -192,7 +225,10 @@ Options:
 ### 🔒 Security
 
 - **Tool permissions** are layered: Coder (read+write+search), TestRunner (execute-only), Reviewer (read-only)
+- **Path traversal protection** — all file operations are sandboxed within the workspace directory; absolute paths and `../` traversal are rejected
 - **Command execution** is sandboxed: whitelist-only (`pytest`, `python`, `npm test`, `cargo test`, `go test`, `mvn test`, `gradle test`, `make test`), timeout limits (max 120s), output truncation (max 8KB)
+- **API authentication** — optional Bearer token auth via `AUTOPATCH_API_KEY` env var; protects all mutation endpoints
+- **Task ID validation** — UUID format enforced, preventing path injection in task storage
 - **Concurrency** is capped via semaphore (`MAX_CONCURRENT_PATCHES`) to prevent resource exhaustion
 - **API keys** are loaded via `.env` — never committed (`.gitignore` enforced)
 
@@ -215,6 +251,9 @@ AutoPatch 是一个基于 [LangGraph](https://github.com/langchain-ai/langgraph)
 - 📄 **标准 `.diff` 输出** — 通过 `git apply` 应用，无需手动修改
 - 🌊 **Token 级实时流式输出** — LLM 输出逐字符流入终端窗口
 - 🖥️ **现代化 Web 看板** — 实时 Agent 工作流可视化 + 流式终端日志
+- 🔐 **API 认证** — 可选的 Bearer token 认证，保护所有写入端点
+- 🐳 **Docker 支持** — `docker-compose up` 一键部署
+- ✅ **测试套件** — 31 个单元/集成测试，覆盖核心模块
 
 ### 🏗️ 系统架构
 
@@ -245,22 +284,37 @@ START
 AutoPatch/
 ├── autopatch.py          # CLI 入口 — 完整端到端流水线
 ├── main.py               # 调试入口 — 使用内置测试 Issue 运行
+├── server.py             # FastAPI 后端 — SSE 流式推送 + 断点续传
+├── config.py             # 集中配置管理（支持环境变量覆盖）
+├── logging_config.py     # 结构化日志配置
 ├── github_client.py      # GitHub REST API 封装 + 仓库克隆管理
 ├── diff_generator.py     # git diff 生成器，写入 .diff 文件
+├── task_store.py         # 任务元数据持久化（JSON）
 │
 ├── agent/
 │   └── graph.py          # LangGraph StateGraph — 节点定义与路由
 │
 ├── tools/
-│   ├── workspace.py      # 线程安全工作目录（ContextVar，支持并发请求）
-│   ├── file_tools.py     # read_file / write_and_replace_file
+│   ├── workspace.py      # 线程安全工作目录（ContextVar，路径遍历防护）
+│   ├── file_tools.py     # read_file / write_and_replace_file / edit_file
 │   ├── search_tools.py   # list_directory / search_codebase / find_definition / grep_in_file
 │   └── execute_tools.py  # run_pytest / run_python_script / run_test_command（沙箱执行）
 │
-└── frontend/             # React 18 + TypeScript + Vite 前端看板
-    └── src/
-        ├── components/   # Header / InputSection / WorkflowVisualizer / TerminalWindow / ResultArea
-        └── hooks/        # usePatchTask — SSE 状态机 + token 流式输出
+├── tests/                # pytest 测试套件（31 个测试）
+│   ├── conftest.py       # 共享 Fixtures
+│   ├── test_workspace.py # 路径遍历防护测试
+│   ├── test_file_tools.py
+│   ├── test_github_client.py
+│   ├── test_task_store.py
+│   └── test_server.py    # API 端点 + 认证测试
+│
+├── eval/                 # SWE-bench 评测框架
+├── frontend/             # React 18 + TypeScript + Vite 前端看板
+│
+├── Dockerfile            # 多阶段构建（Node 前端 + Python 后端）
+├── docker-compose.yml    # app + PostgreSQL 一键部署
+├── pyproject.toml        # 项目配置、开发依赖、工具配置
+└── requirements.txt      # 生产依赖
 ```
 
 ### 🚀 快速开始
@@ -305,24 +359,39 @@ OPENAI_BASE_URL=https://your-proxy/v1     # 使用代理时填写
 # 服务器配置
 CORS_ORIGINS=http://localhost:5173        # 允许的跨域来源，逗号分隔（默认：本地开发端口）
 MAX_CONCURRENT_PATCHES=3                  # 最大并发流水线数量（默认：3）
+AUTOPATCH_API_KEY=your-secret-key         # 可选：启用 API 端点 Bearer token 认证
+LOG_LEVEL=INFO                            # 日志级别：DEBUG / INFO / WARNING / ERROR
+
+# Agent 调参（可选）
+MAX_REVIEW_RETRIES=3                      # Reviewer 最大打回次数（默认：3）
+MAX_CODER_STEPS=25                        # Coder 单次最大工具调用数（默认：25）
 ```
 
 #### 3. 运行
 
-**方式 A — CLI（完整流水线）：**
+**方式 A — Docker（推荐）：**
+
+```bash
+# 启动后端 + PostgreSQL（自动启用断点续传）
+docker-compose up --build
+
+# 浏览器访问 http://localhost:8000
+```
+
+**方式 B — CLI（完整流水线）：**
 
 ```bash
 source .venv/bin/activate
 python autopatch.py https://github.com/owner/repo 42
 ```
 
-**方式 B — 调试模式（内置测试 Issue）：**
+**方式 C — 调试模式（内置测试 Issue）：**
 
 ```bash
 python main.py
 ```
 
-**方式 C — Web 看板：**
+**方式 D — Web 看板（手动启动）：**
 
 ```bash
 # 终端 1：启动后端
@@ -372,7 +441,10 @@ python autopatch.py <repo_url> <issue_number> [选项]
 ### 🔒 安全设计
 
 - **工具权限分层**：Coder（读+写+搜索）、TestRunner（仅执行）、Reviewer（仅读）
+- **路径遍历防护** — 所有文件操作限定在工作目录内，拒绝绝对路径和 `../` 遍历
 - **命令执行沙箱**：白名单制（`pytest`、`python`、`npm test`、`cargo test`、`go test`、`mvn test`、`gradle test`、`make test`），超时限制（最大120秒），输出截断（最大8KB）
+- **API 认证** — 通过 `AUTOPATCH_API_KEY` 环境变量启用 Bearer token 认证，保护写入端点
+- **Task ID 校验** — 强制 UUID 格式，防止路径注入
 - **并发保护**：信号量限制同时进行的流水线数量（`MAX_CONCURRENT_PATCHES`），防止资源耗尽
 - **API Key 保护**：通过 `.env` 加载，`.gitignore` 强制排除，绝不提交
 

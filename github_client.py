@@ -17,10 +17,12 @@ GitHub API 封装层。
 
 import logging
 import os
+import random
 import re
 import shutil
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Union
@@ -29,6 +31,8 @@ from urllib.parse import urlparse
 import requests
 from dotenv import load_dotenv
 
+from config import GITHUB_RETRY_BACKOFF_BASE, GITHUB_RETRY_MAX_ATTEMPTS
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -36,6 +40,8 @@ logger = logging.getLogger(__name__)
 # ── 常量 ──────────────────────────────────────
 GITHUB_API_BASE = "https://api.github.com"
 REQUEST_TIMEOUT = 30  # 秒
+# 5xx 服务端错误 + 429 限速 视为可重试
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 # ══════════════════════════════════════════════
@@ -192,7 +198,12 @@ class GitHubClient:
 
     def _get(self, url: str) -> Union[dict, list]:
         """
-        发送 GET 请求并返回 JSON 结果。
+        发送 GET 请求并返回 JSON 结果，对网络抖动 / 5xx / 429 自动重试。
+
+        重试策略：
+          - 可重试：requests.Timeout / ConnectionError / 5xx / 429
+          - 不可重试：4xx（除 429）—— 直接抛 HTTPError
+          - 指数退避：base * 2**(n-1) + jitter，最多 GITHUB_RETRY_MAX_ATTEMPTS 次
 
         Args:
             url: 完整的 API URL
@@ -201,11 +212,48 @@ class GitHubClient:
             解析后的 JSON 数据
 
         Raises:
-            requests.HTTPError: API 返回错误状态码时抛出
+            requests.HTTPError: 4xx 错误，或重试耗尽后的最后一次 5xx
+            requests.RequestException: 重试耗尽后的网络错误
         """
-        resp = self._session.get(url, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
-        return resp.json()
+        last_exc: Optional[Exception] = None
+        for attempt in range(1, GITHUB_RETRY_MAX_ATTEMPTS + 1):
+            try:
+                resp = self._session.get(url, timeout=REQUEST_TIMEOUT)
+            except (requests.Timeout, requests.ConnectionError) as e:
+                last_exc = e
+                if attempt < GITHUB_RETRY_MAX_ATTEMPTS:
+                    delay = GITHUB_RETRY_BACKOFF_BASE * (2 ** (attempt - 1)) + random.uniform(0, 0.3)
+                    logger.warning(
+                        "  [GitHubClient] 网络错误（%s），%.1fs 后第 %d 次重试: %s",
+                        type(e).__name__, delay, attempt + 1, url,
+                    )
+                    time.sleep(delay)
+                    continue
+                logger.error("  [GitHubClient] 重试耗尽，最终网络错误: %s", e)
+                raise
+
+            # 检查状态码
+            if resp.status_code in _RETRYABLE_STATUS_CODES and attempt < GITHUB_RETRY_MAX_ATTEMPTS:
+                # 优先使用 GitHub 的 Retry-After 头（针对 429）
+                retry_after = resp.headers.get("Retry-After")
+                if retry_after and retry_after.isdigit():
+                    delay = min(float(retry_after), 30.0)
+                else:
+                    delay = GITHUB_RETRY_BACKOFF_BASE * (2 ** (attempt - 1)) + random.uniform(0, 0.3)
+                logger.warning(
+                    "  [GitHubClient] HTTP %d，%.1fs 后第 %d 次重试: %s",
+                    resp.status_code, delay, attempt + 1, url,
+                )
+                time.sleep(delay)
+                continue
+
+            resp.raise_for_status()
+            return resp.json()
+
+        # 理论上不会走到这里（循环内已 raise 或 return）
+        if last_exc:
+            raise last_exc
+        raise RuntimeError("GitHub _get 重试逻辑异常")
 
     def fetch_issue(self, repo_info: RepoInfo, issue_number: int) -> GitHubIssue:
         """

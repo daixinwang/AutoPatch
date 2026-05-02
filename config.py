@@ -28,6 +28,17 @@ DEFAULT_TIMEOUT_SECONDS: int = int(os.getenv("DEFAULT_TIMEOUT_SECONDS", "30"))
 MAX_TIMEOUT_SECONDS: int = int(os.getenv("MAX_TIMEOUT_SECONDS", "120"))
 MAX_OUTPUT_BYTES: int = int(os.getenv("MAX_OUTPUT_BYTES", "8000"))
 
+# ── GitHub HTTP 重试 ─────────────────────────────────────
+# 网络抖动 / 5xx / 429（限速）时重试，4xx（除 429）不重试。
+GITHUB_RETRY_MAX_ATTEMPTS: int = int(os.getenv("GITHUB_RETRY_MAX_ATTEMPTS", "3"))
+GITHUB_RETRY_BACKOFF_BASE: float = float(os.getenv("GITHUB_RETRY_BACKOFF_BASE", "1.0"))
+
+# ── LLM Context 控制 ─────────────────────────────────────
+# Coder 进入节点时如果 messages 总字符数超过此阈值，触发硬压缩（保留 Issue + 各 Agent 摘要消息）。
+MAX_MESSAGE_CHARS: int = int(os.getenv("MAX_MESSAGE_CHARS", "60000"))
+# Reviewer 内部循环允许的工具调用总数（防止失控）。
+MAX_REVIEWER_TOOL_CALLS: int = int(os.getenv("MAX_REVIEWER_TOOL_CALLS", "8"))
+
 
 def validate_required_env() -> None:
     """校验必需的环境变量，缺失时抛出明确错误。"""

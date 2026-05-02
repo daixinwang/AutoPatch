@@ -71,10 +71,11 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """FastAPI lifespan：启动时初始化 Checkpointer 和任务存储。"""
-    global agent_app, task_store
+    """FastAPI lifespan：启动时初始化 Checkpointer 和任务存储；关闭时释放连接池。"""
+    global agent_app, task_store, _db_pool
 
     task_store = TaskStore()
+    _db_pool = None
 
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
@@ -85,21 +86,38 @@ async def _lifespan(app: FastAPI):
             from langgraph.checkpoint.postgres import PostgresSaver
             from psycopg_pool import ConnectionPool
 
-            pool = ConnectionPool(
+            _db_pool = ConnectionPool(
                 conninfo=db_url,
                 max_size=DB_POOL_MAX_SIZE,
                 kwargs={"autocommit": True, "prepare_threshold": 0},
                 open=True,
             )
-            checkpointer = PostgresSaver(pool)
+            checkpointer = PostgresSaver(_db_pool)
             checkpointer.setup()   # 幂等：建表（已存在则跳过）
             agent_app = build_graph(checkpointer=checkpointer)
             logger.info("PostgreSQL Checkpointer 初始化完成，断点续传已启用")
-        except Exception as e:
+        except Exception:
             logger.warning("Checkpointer 初始化失败，降级为内存模式", exc_info=True)
             agent_app = build_graph(checkpointer=None)
+            if _db_pool is not None:
+                # 部分初始化失败时也关闭，避免连接泄漏
+                try:
+                    _db_pool.close()
+                except Exception:
+                    logger.debug("关闭半初始化连接池时出错", exc_info=True)
+                _db_pool = None
 
-    yield   # 应用运行期间
+    try:
+        yield   # 应用运行期间
+    finally:
+        # 关闭 PostgreSQL 连接池，防止长跑时连接泄漏
+        if _db_pool is not None:
+            try:
+                _db_pool.close()
+                logger.info("PostgreSQL 连接池已关闭")
+            except Exception:
+                logger.warning("关闭连接池失败", exc_info=True)
+            _db_pool = None
 
 
 fastapi_app = FastAPI(
@@ -148,8 +166,33 @@ async def _verify_api_key(request: Request) -> None:
 # ── 全局有状态对象（在 startup 中初始化）────────────────────
 # agent_app: 带 PostgresSaver checkpointer 的 LangGraph 实例
 # task_store: 任务元数据持久化（tasks/*.json）
+# _db_pool:  PostgreSQL 连接池（lifespan 退出时关闭）
 agent_app = None
 task_store: Optional[TaskStore] = None
+_db_pool = None
+
+# 防止同一 task_id 并发恢复：锁字典 + 字典访问的元锁
+_resume_locks: dict[str, asyncio.Lock] = {}
+_resume_locks_meta_lock = asyncio.Lock()
+
+
+async def _acquire_resume_lock(task_id: str) -> asyncio.Lock:
+    """获取（或创建）指定 task_id 的恢复锁。"""
+    async with _resume_locks_meta_lock:
+        lock = _resume_locks.get(task_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            _resume_locks[task_id] = lock
+        return lock
+
+
+async def _release_resume_lock(task_id: str) -> None:
+    """释放并清理指定 task_id 的锁条目（避免字典无限增长）。"""
+    async with _resume_locks_meta_lock:
+        lock = _resume_locks.get(task_id)
+        # 仅当锁未被其他协程持有时才删除
+        if lock is not None and not lock.locked():
+            _resume_locks.pop(task_id, None)
 
 
 
@@ -550,7 +593,31 @@ async def resume_pipeline(task_id: str) -> AsyncGenerator[str, None]:
       - task_id 对应的任务存在且状态为 interrupted
       - workspace 目录未被删除
       - PostgreSQL checkpointer 已正确配置（DATABASE_URL）
+
+    并发保护：同一 task_id 不允许多客户端同时恢复，第二个请求会立即拒绝，
+    防止两个 worker 从同一 checkpoint 恢复后互相覆盖状态、重复清理 workspace。
     """
+    # 同一 task_id 的并发恢复保护：如果锁已被持有，立即拒绝（不阻塞排队）
+    resume_lock = await _acquire_resume_lock(task_id)
+    if resume_lock.locked():
+        yield sse_event({
+            "type": "error",
+            "message": f"任务 {task_id} 正在被其他会话恢复，请稍后再试",
+        })
+        yield sse_event({"type": "done"})
+        return
+
+    await resume_lock.acquire()
+    try:
+        async for chunk in _resume_pipeline_inner(task_id):
+            yield chunk
+    finally:
+        resume_lock.release()
+        await _release_resume_lock(task_id)
+
+
+async def _resume_pipeline_inner(task_id: str) -> AsyncGenerator[str, None]:
+    """resume_pipeline 主体（在 task_id 锁保护下执行；自行管理并发信号量）。"""
     # 超出并发上限时立即拒绝
     try:
         await asyncio.wait_for(_pipeline_semaphore.acquire(), timeout=0)

@@ -42,3 +42,29 @@ export interface PatchInput {
   repoUrl:     string   // e.g. "owner/repo" or full URL
   issueNumber: string   // e.g. "42"
 }
+
+// ── Issue 预览 ───────────────────────────────────────────
+export interface IssuePreview {
+  issueTitle:      string
+  issueBody:       string
+  issueState:      string    // "open" | "closed"
+  issueLabels:     string[]
+  commentCount:    number
+  issueUrl:        string
+  repoLanguage:    string
+  repoStars:       number
+  repoPrivate:     boolean
+  repoDescription: string
+  defaultBranch:   string
+}
+
+// ── 历史记录 ─────────────────────────────────────────
+export interface HistoryRecord {
+  id: string
+  timestamp: number
+  repoUrl: string
+  issueNumber: string
+  status: 'success' | 'failed'
+  result: TaskResult
+  issuePreview?: IssuePreview
+}

@@ -181,3 +181,65 @@ class TestGitApplyAndPush:
                 "this is not a valid diff at all",
                 repo_info, "fake-token",
             )
+
+
+# ── POST /api/apply ─────────────────────────────────────────
+
+
+class TestApplyEndpoint:
+    @pytest.mark.asyncio
+    async def test_apply_returns_pr_url(self, monkeypatch):
+        import server
+        from unittest.mock import MagicMock, patch
+
+        # mock _git_apply_and_push — 跳过真实 git/push
+        monkeypatch.setattr(server, "_git_apply_and_push", lambda *a, **kw: None)
+
+        mock_client = MagicMock()
+        mock_client.fetch_repo_metadata.return_value = {"default_branch": "main"}
+        mock_client.create_pull_request.return_value = "https://github.com/owner/repo/pull/99"
+
+        mock_ws = MagicMock()
+        mock_ws.clone.return_value = "/tmp/fake_repo"
+
+        with patch("server.GitHubClient", return_value=mock_client), \
+             patch("server.RepoWorkspace", return_value=mock_ws):
+            transport = httpx.ASGITransport(app=fastapi_app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                resp = await client.post("/api/apply", json={
+                    "repoUrl":     "owner/repo",
+                    "issueNumber": 42,
+                    "diffContent": "diff --git a/x b/x\n",
+                })
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["prUrl"] == "https://github.com/owner/repo/pull/99"
+        assert data["branchName"] == "autopatch/issue-42"
+
+    @pytest.mark.asyncio
+    async def test_apply_github_error_returns_422(self, monkeypatch):
+        import server
+        import requests
+        from unittest.mock import MagicMock, patch
+
+        monkeypatch.setattr(server, "_git_apply_and_push", lambda *a, **kw: None)
+
+        mock_client = MagicMock()
+        mock_client.fetch_repo_metadata.return_value = {"default_branch": "main"}
+        mock_client.create_pull_request.side_effect = requests.HTTPError("403 Forbidden")
+
+        mock_ws = MagicMock()
+        mock_ws.clone.return_value = "/tmp/fake_repo"
+
+        with patch("server.GitHubClient", return_value=mock_client), \
+             patch("server.RepoWorkspace", return_value=mock_ws):
+            transport = httpx.ASGITransport(app=fastapi_app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                resp = await client.post("/api/apply", json={
+                    "repoUrl":     "owner/repo",
+                    "issueNumber": 42,
+                    "diffContent": "diff --git a/x b/x\n",
+                })
+
+        assert resp.status_code == 422

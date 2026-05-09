@@ -419,8 +419,6 @@ def _git_apply_and_push(
     Raises:
         subprocess.CalledProcessError: git 命令非零退出（如 apply 冲突、push 失败）
     """
-    import tempfile as _tempfile
-
     cwd = str(repo_path)
 
     # 1. 创建新分支
@@ -430,7 +428,7 @@ def _git_apply_and_push(
     )
 
     # 2. 将 diff 写入临时文件并 apply
-    with _tempfile.NamedTemporaryFile(
+    with tempfile.NamedTemporaryFile(
         mode="w", suffix=".diff", delete=False, encoding="utf-8"
     ) as f:
         f.write(diff_content)
@@ -472,7 +470,7 @@ def _git_apply_and_push(
     )
     if result.returncode != 0:
         # 分支已存在时追加时间戳后缀重试一次
-        if "already exists" in result.stderr or "rejected" in result.stderr:
+        if "already exists" in result.stderr:
             from datetime import datetime
             branch_retry = f"{branch}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
             subprocess.run(
@@ -485,8 +483,10 @@ def _git_apply_and_push(
             )
             logger.info("[apply] 分支已存在，重命名为 %s 后成功 push", branch_retry)
         else:
+            # 从错误消息中移除 remote URL（含 token），防止泄露
+            safe_stderr = result.stderr.replace(remote_url, "https://github.com/<redacted>")
             raise subprocess.CalledProcessError(
-                result.returncode, "git push", result.stdout, result.stderr
+                result.returncode, "git push", result.stdout, safe_stderr
             )
 
 

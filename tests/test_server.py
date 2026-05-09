@@ -156,3 +156,28 @@ class TestGitApplyAndPush:
         # 验证 push 被调用
         assert len(push_calls) == 1
         assert "push" in push_calls[0]
+
+    def test_raises_on_invalid_diff(self, tmp_path, monkeypatch):
+        """无效 diff 应导致 CalledProcessError，且不留下临时文件。"""
+        import subprocess
+        import glob
+        from github_client import parse_github_url
+        from server import _git_apply_and_push
+
+        repo = self._make_repo_with_file(tmp_path)
+        repo_info = parse_github_url("owner/repo")
+
+        # mock push — 防止网络调用（实际上 apply 会先失败，不会走到 push）
+        real_run = subprocess.run
+        def fake_run(cmd, **kwargs):
+            if isinstance(cmd, list) and "push" in cmd:
+                return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+            return real_run(cmd, **kwargs)
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        with pytest.raises(subprocess.CalledProcessError):
+            _git_apply_and_push(
+                repo, "autopatch/issue-99",
+                "this is not a valid diff at all",
+                repo_info, "fake-token",
+            )

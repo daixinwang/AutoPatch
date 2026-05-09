@@ -1010,12 +1010,17 @@ async def apply_endpoint(req: ApplyRequest):
             return {"prUrl": pr_url, "branchName": branch}
         except subprocess.CalledProcessError as e:
             stderr = e.stderr or ""
-            if "error: patch failed" in stderr or "error: " in stderr:
+            stdout = e.stdout or ""
+            logger.error(
+                "apply 流水线 git 命令失败 [cmd=%s returncode=%d]\nstdout: %s\nstderr: %s",
+                e.cmd, e.returncode, stdout[:500], stderr[:500],
+            )
+            if "error: patch failed" in stderr or "patch does not apply" in stderr:
                 raise HTTPException(
                     status_code=422,
-                    detail="Patch 无法直接应用，可能存在冲突，请手动 git apply",
+                    detail=f"Patch 无法直接应用（可能 repo 已更新）: {stderr[:200]}",
                 )
-            raise HTTPException(status_code=422, detail=f"git 操作失败: {stderr[:300]}")
+            raise HTTPException(status_code=422, detail=f"git 操作失败: {stderr[:300] or stdout[:300]}")
         except requests.HTTPError as e:
             raise HTTPException(status_code=422, detail=f"GitHub API 错误: {e}")
     finally:

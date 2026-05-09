@@ -1,10 +1,12 @@
-import { Github, Zap, ExternalLink, Sun, Moon, Monitor } from 'lucide-react'
+import { Github, ExternalLink, Sun, Moon, Monitor, PanelLeftOpen } from 'lucide-react'
 import { cn } from '../lib/utils'
 import type { ThemeMode } from '../hooks/useTheme'
 
 interface Props {
-  themeMode:    ThemeMode
-  onThemeChange: (mode: ThemeMode) => void
+  themeMode:       ThemeMode
+  onThemeChange:   (mode: ThemeMode) => void
+  sidebarOpen:     boolean
+  onToggleSidebar: () => void
 }
 
 const THEME_OPTIONS: { mode: ThemeMode; icon: React.ReactNode; label: string }[] = [
@@ -13,25 +15,26 @@ const THEME_OPTIONS: { mode: ThemeMode; icon: React.ReactNode; label: string }[]
   { mode: 'dark',   icon: <Moon    className="h-3.5 w-3.5" />, label: 'Dark'   },
 ]
 
-export default function Header({ themeMode, onThemeChange }: Props) {
+export default function Header({ themeMode, onThemeChange, sidebarOpen, onToggleSidebar }: Props) {
   return (
     <header
-      className="sticky top-0 z-50 border-b border-bg-border backdrop-blur-xl transition-colors"
+      className="sticky top-0 z-50 backdrop-blur-xl transition-colors"
       style={{ backgroundColor: 'var(--bg-base-alpha)' }}
     >
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-        {/* Logo */}
-        <div className="flex items-center gap-3">
-          <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-brand-dim shadow-glow-brand">
-            <Zap className="h-4 w-4 text-white" strokeWidth={2.5} />
-            <span className="absolute inset-0 rounded-lg animate-pulse-slow opacity-40 bg-brand blur-sm" />
-          </div>
-          <span className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-            Auto<span className="text-gradient">Patch</span>
-          </span>
-          <span className="flex items-center gap-1 rounded-full border border-brand/30 bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand-glow">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent-green animate-pulse" />
-            AI Agent
+      <div className="flex h-14 items-center justify-between px-4">
+        {/* 左侧：展开按钮（折叠时显示）+ 标题 */}
+        <div className="flex items-center gap-2">
+          {!sidebarOpen && (
+            <button
+              onClick={onToggleSidebar}
+              className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+              title="展开侧边栏"
+            >
+              <PanelLeftOpen className="h-5 w-5" />
+            </button>
+          )}
+          <span className="text-xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            AutoPatch
           </span>
         </div>
 
@@ -60,9 +63,6 @@ export default function Header({ themeMode, onThemeChange }: Props) {
             ))}
           </div>
 
-          <span className="hidden text-xs text-text-muted sm:block">
-            Powered by LangGraph
-          </span>
           <a
             href="https://github.com/daixinwang/AutoPatch"
             target="_blank"

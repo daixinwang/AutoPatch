@@ -1,73 +1,184 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Header             from './components/Header'
 import InputSection       from './components/InputSection'
-import WorkflowVisualizer from './components/WorkflowVisualizer'
+import IssuePreviewCard   from './components/IssuePreviewCard'
 import TerminalWindow     from './components/TerminalWindow'
 import ResultArea         from './components/ResultArea'
+import Sidebar            from './components/Sidebar'
 import { usePatchTask }   from './hooks/usePatchTask'
 import { useTheme }       from './hooks/useTheme'
-import type { PatchInput } from './types'
+import { useIssuePreview } from './hooks/useIssuePreview'
+import { useHistory }     from './hooks/useHistory'
+import type { PatchInput, HistoryRecord } from './types'
 
 export default function App() {
   const { mode: themeMode, setMode: setThemeMode } = useTheme()
-  const { status, nodes, logs, result, startTask, reset } = usePatchTask()
+  const { status, logs, result, startTask, reset } = usePatchTask()
+  const { previewStatus, preview, previewError, fetchPreview, clearPreview } = useIssuePreview()
+  const { records, addRecord } = useHistory()
 
   const [lastInput, setLastInput] = useState<PatchInput>({
     repoUrl: 'daixinwang/AutoPatch',
     issueNumber: '42',
   })
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  // 任务完成后自动存入历史记录
+  const savedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if ((status === 'success' || status === 'failed') && result !== null) {
+      // 避免同一结果重复写入（strict mode 双调用）
+      const key = `${lastInput.repoUrl}/${lastInput.issueNumber}/${result.elapsedMs}`
+      if (savedRef.current === key) return
+      savedRef.current = key
+
+      const record: HistoryRecord = {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        repoUrl: lastInput.repoUrl,
+        issueNumber: lastInput.issueNumber,
+        status: status === 'success' ? 'success' : 'failed',
+        result,
+        issuePreview: preview ?? undefined,
+      }
+      addRecord(record)
+    }
+  }, [status, result])
 
   function handleSubmit(input: PatchInput) {
     setLastInput(input)
+    clearPreview()
+    setSelectedHistoryId(null)
     startTask(input)
   }
 
-  const showWorkflow = status !== 'idle'
-  const showResult   = status === 'success' && result !== null
+  function handlePreview(input: PatchInput) {
+    setLastInput(input)
+    fetchPreview(input)
+  }
+
+  function handleNewFix() {
+    setSelectedHistoryId(null)
+    reset()
+    clearPreview()
+  }
+
+  const showWorkflow   = status !== 'idle' && selectedHistoryId === null
+  const showResult     = status === 'success' && result !== null && selectedHistoryId === null
+  const showPreview    = preview !== null && status === 'idle' && selectedHistoryId === null
+  const showPreviewErr = previewStatus === 'error' && status === 'idle' && selectedHistoryId === null
+
+  const selectedRecord = selectedHistoryId
+    ? records.find(r => r.id === selectedHistoryId) ?? null
+    : null
 
   return (
-    <div className="min-h-screen bg-grid-pattern transition-colors" style={{ backgroundColor: 'var(--bg-base)' }}>
+    <div
+      className="flex min-h-screen bg-grid-pattern transition-colors"
+      style={{ backgroundColor: 'var(--bg-base)' }}
+    >
       {/* 顶部渐变光晕 */}
       <div className="pointer-events-none fixed inset-x-0 top-0 h-72 bg-gradient-radial from-brand/8 via-transparent to-transparent" />
 
-      <Header themeMode={themeMode} onThemeChange={setThemeMode} />
+      {/* 左侧侧边栏（带折叠动画） */}
+      <div
+        className="flex-shrink-0 overflow-hidden transition-all duration-200"
+        style={{ width: sidebarOpen ? 240 : 0 }}
+      >
+        <Sidebar
+          records={records}
+          selectedId={selectedHistoryId}
+          onNewFix={handleNewFix}
+          onSelect={setSelectedHistoryId}
+          onCollapse={() => setSidebarOpen(false)}
+        />
+      </div>
 
-      <main className="mx-auto max-w-4xl space-y-5 px-6 py-10">
-        {/* Hero 文案 */}
-        <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl" style={{ color: 'var(--text-primary)' }}>
-            Fix GitHub Issues{' '}
-            <span className="text-gradient">Automatically</span>
-          </h1>
-          <p className="mt-3 text-sm text-text-secondary max-w-xl mx-auto">
-            Multi-agent pipeline powered by LangGraph — Planner analyzes, Coder fixes,
-            TestRunner validates, Reviewer approves.
-          </p>
-        </div>
+      {/* 右侧主内容 */}
+      <div className="flex flex-1 flex-col min-w-0">
+        <Header
+          themeMode={themeMode}
+          onThemeChange={setThemeMode}
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen(o => !o)}
+        />
 
-        {/* 输入区 */}
-        <InputSection status={status} onSubmit={handleSubmit} onReset={reset} />
+        <main className="flex flex-1 flex-col px-6">
+          {selectedRecord ? (
+            /* 历史查看视图 — 顶部对齐 */
+            <div className="mx-auto w-full max-w-3xl space-y-5 py-10">
+              <div
+                className="flex items-center gap-2 text-sm"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                <span className="font-medium text-text-primary">
+                  {selectedRecord.repoUrl.replace(/^https?:\/\/github\.com\//, '')}
+                </span>
+                <span>·</span>
+                <span>Issue #{selectedRecord.issueNumber}</span>
+              </div>
+              <ResultArea
+                result={selectedRecord.result}
+                repoUrl={selectedRecord.repoUrl}
+                issue={selectedRecord.issueNumber}
+              />
+            </div>
+          ) : status === 'idle' ? (
+            /* 空闲态 — 垂直居中 */
+            <div className="flex flex-1 items-center justify-center">
+              <div className="w-full max-w-3xl space-y-5">
+                <InputSection
+                  status={status}
+                  onSubmit={handleSubmit}
+                  onReset={reset}
+                  onPreview={handlePreview}
+                  previewStatus={previewStatus}
+                />
+                {showPreviewErr && (
+                  <div className="card-gradient-border px-4 py-3 text-sm text-accent-red animate-slide-up">
+                    预览失败：{previewError}
+                  </div>
+                )}
+                {showPreview && (
+                  <IssuePreviewCard
+                    preview={preview}
+                    onStartPipeline={() => handleSubmit(lastInput)}
+                  />
+                )}
+              </div>
+            </div>
+          ) : (
+            /* 运行中 / 结果 — 顶部对齐 */
+            <div className="mx-auto w-full max-w-3xl space-y-5 py-10">
+              <InputSection
+                status={status}
+                onSubmit={handleSubmit}
+                onReset={reset}
+                onPreview={handlePreview}
+                previewStatus={previewStatus}
+              />
+              {showPreviewErr && (
+                <div className="card-gradient-border px-4 py-3 text-sm text-accent-red animate-slide-up">
+                  预览失败：{previewError}
+                </div>
+              )}
+              {showWorkflow && <TerminalWindow logs={logs} />}
+              {showResult && (
+                <ResultArea
+                  result={result}
+                  repoUrl={lastInput.repoUrl}
+                  issue={lastInput.issueNumber}
+                />
+              )}
+            </div>
+          )}
+        </main>
 
-        {/* Agent 工作流可视化 */}
-        {showWorkflow && <WorkflowVisualizer nodes={nodes} />}
-
-        {/* 终端日志窗口（任务进行中始终显示） */}
-        {showWorkflow && <TerminalWindow logs={logs} />}
-
-        {/* 结果区 */}
-        {showResult && (
-          <ResultArea
-            result={result}
-            repoUrl={lastInput.repoUrl}
-            issue={lastInput.issueNumber}
-          />
-        )}
-      </main>
-
-      {/* 底部装饰 */}
-      <footer className="mt-20 border-t border-bg-border py-6 text-center text-xs text-text-muted">
-        AutoPatch · Built with LangGraph + React · Open Source
-      </footer>
+        <footer className="mt-auto py-6 text-center text-xs text-text-muted">
+          AutoPatch · Built with LangGraph + React · Open Source
+        </footer>
+      </div>
     </div>
   )
 }

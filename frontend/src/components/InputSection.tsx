@@ -1,15 +1,18 @@
 import { useState } from 'react'
-import { GitBranch, Hash, Rocket, Loader2, RotateCcw } from 'lucide-react'
+import { GitBranch, Hash, Rocket, Loader2, RotateCcw, Eye } from 'lucide-react'
 import { cn } from '../lib/utils'
 import type { PatchInput, TaskStatus } from '../types'
+import type { PreviewStatus } from '../hooks/useIssuePreview'
 
 interface Props {
-  status:     TaskStatus
-  onSubmit:   (input: PatchInput) => void
-  onReset:    () => void
+  status:        TaskStatus
+  onSubmit:      (input: PatchInput) => void
+  onReset:       () => void
+  onPreview:     (input: PatchInput) => void
+  previewStatus: PreviewStatus
 }
 
-export default function InputSection({ status, onSubmit, onReset }: Props) {
+export default function InputSection({ status, onSubmit, onReset, onPreview, previewStatus }: Props) {
   const [repo,  setRepo]  = useState('daixinwang/AutoPatch')
   const [issue, setIssue] = useState('42')
 
@@ -133,6 +136,27 @@ export default function InputSection({ status, onSubmit, onReset }: Props) {
                 </>
               )}
             </button>
+
+            {/* 预览按钮（非运行中显示） */}
+            {!isRunning && (
+              <button
+                type="button"
+                onClick={() => onPreview({ repoUrl: repo.trim(), issueNumber: issue.trim() })}
+                disabled={!repo.trim() || !issue.trim() || previewStatus === 'loading'}
+                className="flex items-center gap-1.5 rounded-lg border px-4 py-2.5 text-sm transition-all hover:border-brand/30 hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  borderColor:     'var(--bg-border)',
+                  backgroundColor: 'var(--bg-card)',
+                  color:           'var(--text-secondary)',
+                }}
+              >
+                {previewStatus === 'loading'
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Eye className="h-3.5 w-3.5" />
+                }
+                Preview
+              </button>
+            )}
 
             {/* 重置按钮（任务完成后显示） */}
             {isDone && (

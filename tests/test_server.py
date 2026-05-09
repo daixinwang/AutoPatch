@@ -243,3 +243,28 @@ class TestApplyEndpoint:
                 })
 
         assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_apply_clone_failure_cleans_up_workspace(self, monkeypatch):
+        """clone 失败时 workspace 目录应被清理（不泄漏磁盘空间）。"""
+        import server
+        from unittest.mock import MagicMock, patch
+
+        mock_ws = MagicMock()
+        mock_ws.clone.side_effect = RuntimeError("clone failed")
+
+        mock_client = MagicMock()
+        mock_client.fetch_repo_metadata.return_value = {"default_branch": "main"}
+
+        with patch("server.GitHubClient", return_value=mock_client), \
+             patch("server.RepoWorkspace", return_value=mock_ws):
+            transport = httpx.ASGITransport(app=fastapi_app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                resp = await client.post("/api/apply", json={
+                    "repoUrl":     "owner/repo",
+                    "issueNumber": 42,
+                    "diffContent": "diff --git a/x b/x\n",
+                })
+
+        assert resp.status_code == 422
+        mock_ws.cleanup.assert_called_once()

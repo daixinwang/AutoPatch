@@ -14,9 +14,9 @@ export default {
           hover:   'var(--bg-hover)',
         },
         brand: {
-          DEFAULT: '#6366f1',
-          dim:     '#4f46e5',
-          glow:    '#818cf8',
+          DEFAULT: '#10a37f',
+          dim:     '#0d8f6f',
+          glow:    '#34d399',
         },
         accent: {
           green:  '#22d3a5',
@@ -46,8 +46,8 @@ export default {
       },
       keyframes: {
         glow: {
-          '0%':   { boxShadow: '0 0 8px #6366f140' },
-          '100%': { boxShadow: '0 0 20px #6366f180, 0 0 40px #6366f130' },
+          '0%':   { boxShadow: '0 0 8px #10a37f40' },
+          '100%': { boxShadow: '0 0 20px #10a37f80, 0 0 40px #10a37f30' },
         },
         slideUp: {
           '0%':   { opacity: '0', transform: 'translateY(16px)' },
@@ -71,10 +71,10 @@ export default {
         'grid-pattern':     "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M0 0h40v1H0zM0 0v40h1V0z'/%3E%3C/g%3E%3C/svg%3E\")",
       },
       boxShadow: {
-        'card':       '0 0 0 1px rgba(99,102,241,0.08), 0 4px 24px rgba(0,0,0,0.4)',
-        'card-hover': '0 0 0 1px rgba(99,102,241,0.2), 0 8px 32px rgba(0,0,0,0.5)',
-        'glow-brand': '0 0 20px rgba(99,102,241,0.4)',
-        'glow-green': '0 0 12px rgba(34,211,165,0.4)',
+        'card':       '0 0 0 1px rgba(16,163,127,0.08), 0 4px 24px rgba(0,0,0,0.3)',
+        'card-hover': '0 0 0 1px rgba(16,163,127,0.2), 0 8px 32px rgba(0,0,0,0.4)',
+        'glow-brand': '0 0 20px rgba(16,163,127,0.35)',
+        'glow-green': '0 0 12px rgba(16,163,127,0.4)',
         'inner-glow': 'inset 0 1px 0 rgba(255,255,255,0.05)',
       },
     },

@@ -266,7 +266,7 @@ function DiffView({ diff }: { diff: string }) {
         } else if (line.startsWith('#')) {
           color = 'var(--terminal-text-dim)'
         } else if (line.startsWith('diff ') || line.startsWith('index ')) {
-          color = '#6366f1'   // brand purple
+          color = '#10a37f'   // brand green
         }
 
         return (

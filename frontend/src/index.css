@@ -7,71 +7,71 @@
    ══════════════════════════════════════════ */
 :root,
 .dark {
-  --bg-base:        #0a0a0f;
-  --bg-base-alpha:  rgba(10, 10, 15, 0.80);   /* Header 毛玻璃背景 */
-  --bg-surface:     #0f0f17;
-  --bg-card:        #13131e;
-  --bg-border:      #1e1e2e;
-  --bg-hover:       #1a1a28;
+  --bg-base:        #212121;
+  --bg-base-alpha:  rgba(33, 33, 33, 0.85);   /* Header 毛玻璃背景 */
+  --bg-surface:     #171717;
+  --bg-card:        #2f2f2f;
+  --bg-border:      #383838;
+  --bg-hover:       #2f2f2f;
 
-  --text-primary:   #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted:     #475569;
+  --text-primary:   #ececec;
+  --text-secondary: #8e8ea0;
+  --text-muted:     #6b7280;
 
-  --scrollbar-track: #0f0f17;
-  --scrollbar-thumb: #1e1e2e;
+  --scrollbar-track: #171717;
+  --scrollbar-thumb: #383838;
 
   /* 终端和代码区域 */
-  --terminal-bg:        #0d1117;
-  --terminal-title:     #13131e;
-  --terminal-border:    #1e1e2e;
-  --terminal-text:      #94a3b8;
-  --terminal-text-dim:  #475569;
-  --terminal-prompt:    #818cf8;
-  --terminal-cursor:    #e2e8f0;
+  --terminal-bg:        #1a1a1a;
+  --terminal-title:     #2f2f2f;
+  --terminal-border:    #383838;
+  --terminal-text:      #8e8ea0;
+  --terminal-text-dim:  #6b7280;
+  --terminal-prompt:    #10a37f;
+  --terminal-cursor:    #ececec;
 
   /* diff 行背景（深色版）*/
-  --diff-add-bg:    rgba(34,  211, 165, 0.08);
-  --diff-remove-bg: rgba(248, 113, 113, 0.08);
-  --diff-hunk-bg:   rgba(56,  189, 248, 0.08);
+  --diff-add-bg:    rgba(16,  163, 127, 0.10);
+  --diff-remove-bg: rgba(239, 68,  68,  0.10);
+  --diff-hunk-bg:   rgba(99,  102, 241, 0.08);
 
   /* 卡片渐变边框 */
-  --card-border-gradient: linear-gradient(135deg, #6366f130, #1e1e2e, #6366f120);
+  --card-border-gradient: linear-gradient(135deg, #10a37f25, #383838, #10a37f18);
 }
 
 /* ══════════════════════════════════════════
    CSS 变量 — 浅色主题
    ══════════════════════════════════════════ */
 .light {
-  --bg-base:        #f8fafc;
-  --bg-base-alpha:  rgba(248, 250, 252, 0.85); /* Header 毛玻璃背景 */
-  --bg-surface:     #f1f5f9;
+  --bg-base:        #ffffff;
+  --bg-base-alpha:  rgba(255, 255, 255, 0.85); /* Header 毛玻璃背景 */
+  --bg-surface:     #f9f9f9;
   --bg-card:        #ffffff;
-  --bg-border:      #e2e8f0;
-  --bg-hover:       #f1f5f9;
+  --bg-border:      #e5e7eb;
+  --bg-hover:       #f5f5f5;
 
-  --text-primary:   #0f172a;
-  --text-secondary: #475569;
-  --text-muted:     #94a3b8;
+  --text-primary:   #0d0d0d;
+  --text-secondary: #6b7280;
+  --text-muted:     #9ca3af;
 
-  --scrollbar-track: #f1f5f9;
-  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-track: #f9f9f9;
+  --scrollbar-thumb: #d1d5db;
 
-  /* 浅色模式下终端和代码区域也用浅色 */
-  --terminal-bg:        #f8fafc;
-  --terminal-title:     #f1f5f9;
-  --terminal-border:    #e2e8f0;
-  --terminal-text:      #334155;
-  --terminal-text-dim:  #64748b;
-  --terminal-prompt:    #4f46e5;
-  --terminal-cursor:    #0f172a;
+  /* 浅色模式下终端和代码区域 */
+  --terminal-bg:        #f9f9f9;
+  --terminal-title:     #f0f0f0;
+  --terminal-border:    #e5e7eb;
+  --terminal-text:      #374151;
+  --terminal-text-dim:  #6b7280;
+  --terminal-prompt:    #10a37f;
+  --terminal-cursor:    #0d0d0d;
 
   /* diff 行背景（浅色版）*/
-  --diff-add-bg:    rgba(22, 163, 74,  0.08);
-  --diff-remove-bg: rgba(220, 38,  38, 0.08);
-  --diff-hunk-bg:   rgba(59,  130, 246, 0.08);
+  --diff-add-bg:    rgba(16,  163, 127, 0.08);
+  --diff-remove-bg: rgba(239, 68,  68,  0.08);
+  --diff-hunk-bg:   rgba(59,  130, 246, 0.06);
 
-  --card-border-gradient: linear-gradient(135deg, #6366f120, #e2e8f0, #6366f110);
+  --card-border-gradient: linear-gradient(135deg, #10a37f18, #e5e7eb, #10a37f10);
 }
 
 @layer base {
@@ -117,7 +117,7 @@
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #6366f140;
+    background: #10a37f50;
   }
 }
 
@@ -174,16 +174,14 @@
 }
 
 @layer utilities {
-  /* 深色模式：亮紫色渐变（原色）*/
   .text-gradient {
-    background: linear-gradient(135deg, #818cf8, #6366f1, #a78bfa);
+    background: linear-gradient(135deg, #10a37f, #34d399);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
-  /* 浅色模式：加深紫色，保证在白底上清晰可读 */
   .light .text-gradient {
-    background: linear-gradient(135deg, #4338ca, #4f46e5, #7c3aed);
+    background: linear-gradient(135deg, #0d8f6f, #10a37f);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

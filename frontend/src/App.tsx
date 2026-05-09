@@ -9,6 +9,10 @@ import { usePatchTask }   from './hooks/usePatchTask'
 import { useTheme }       from './hooks/useTheme'
 import { useIssuePreview } from './hooks/useIssuePreview'
 import { useHistory }     from './hooks/useHistory'
+import { useLanguage }    from './hooks/useLanguage'
+import { LanguageContext } from './contexts/LanguageContext'
+import { zh }             from './i18n/zh'
+import { en }             from './i18n/en'
 import type { PatchInput, HistoryRecord } from './types'
 
 export default function App() {
@@ -16,6 +20,8 @@ export default function App() {
   const { status, logs, result, startTask, reset } = usePatchTask()
   const { previewStatus, preview, previewError, fetchPreview, clearPreview } = useIssuePreview()
   const { records, addRecord } = useHistory()
+  const { lang, setLang } = useLanguage()
+  const locale = lang === 'zh' ? zh : en
 
   const [lastInput, setLastInput] = useState<PatchInput>({
     repoUrl: 'daixinwang/AutoPatch',
@@ -74,6 +80,7 @@ export default function App() {
     : null
 
   return (
+    <LanguageContext.Provider value={locale}>
     <div
       className="flex min-h-screen bg-grid-pattern transition-colors"
       style={{ backgroundColor: 'var(--bg-base)' }}
@@ -102,6 +109,8 @@ export default function App() {
           onThemeChange={setThemeMode}
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen(o => !o)}
+          lang={lang}
+          onLangChange={setLang}
         />
 
         <main className="flex flex-1 flex-col px-6">
@@ -137,7 +146,7 @@ export default function App() {
                 />
                 {showPreviewErr && (
                   <div className="card-gradient-border px-4 py-3 text-sm text-accent-red animate-slide-up">
-                    预览失败：{previewError}
+                    {locale.app.previewFailed(previewError ?? '')}
                   </div>
                 )}
                 {showPreview && (
@@ -176,9 +185,10 @@ export default function App() {
         </main>
 
         <footer className="mt-auto py-6 text-center text-xs text-text-muted">
-          AutoPatch · Built with LangGraph + React · Open Source
+          {locale.footer.text}
         </footer>
       </div>
     </div>
+    </LanguageContext.Provider>
   )
 }

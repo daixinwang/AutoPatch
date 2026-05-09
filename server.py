@@ -39,6 +39,7 @@ import contextvars
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import time
 import uuid
@@ -204,6 +205,20 @@ class PatchRequest(BaseModel):
 
 class ResumeRequest(BaseModel):
     taskId: str        # 中断任务的 UUID（由 /api/patch 的 task 事件提供）
+
+
+class PreviewResponse(BaseModel):
+    issueTitle:      str
+    issueBody:       str
+    issueState:      str       # "open" | "closed"
+    issueLabels:     list[str]
+    commentCount:    int
+    issueUrl:        str
+    repoLanguage:    str
+    repoStars:       int
+    repoPrivate:     bool
+    repoDescription: str
+    defaultBranch:   str
 
 
 # ── 节点名 → 前端 ID 映射 ─────────────────────────────────
@@ -382,6 +397,99 @@ async def _consume_agent_stream(
         await asyncio.sleep(0)
 
 
+def _git_apply_and_push(
+    repo_path,
+    branch: str,
+    diff_content: str,
+    repo_info,
+    token: str,
+) -> None:
+    """
+    在本地 git 仓库中应用 diff，创建分支，commit，并 push 到 GitHub。
+
+    同步函数，在 asyncio executor 中调用。
+
+    Args:
+        repo_path:    本地 git 仓库路径（Path 或 str）
+        branch:       新分支名（如 "autopatch/issue-42"）
+        diff_content: unified diff 字符串
+        repo_info:    RepoInfo（含 owner/repo）
+        token:        GitHub Personal Access Token（需 contents:write + pull-requests:write）
+
+    Raises:
+        subprocess.CalledProcessError: git 命令非零退出（如 apply 冲突、push 失败）
+    """
+    import tempfile as _tempfile
+
+    cwd = str(repo_path)
+
+    # 1. 创建新分支
+    subprocess.run(
+        ["git", "checkout", "-b", branch],
+        cwd=cwd, check=True, capture_output=True, text=True,
+    )
+
+    # 2. 将 diff 写入临时文件并 apply
+    with _tempfile.NamedTemporaryFile(
+        mode="w", suffix=".diff", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(diff_content)
+        diff_file = f.name
+
+    try:
+        subprocess.run(
+            ["git", "apply", "--whitespace=fix", diff_file],
+            cwd=cwd, check=True, capture_output=True, text=True,
+        )
+    finally:
+        Path(diff_file).unlink(missing_ok=True)
+
+    # 3. 配置 git 用户（临时，仅本 repo）
+    subprocess.run(
+        ["git", "config", "user.email", "autopatch@bot.local"],
+        cwd=cwd, check=True, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "AutoPatch"],
+        cwd=cwd, check=True, capture_output=True,
+    )
+
+    # 4. Commit
+    subprocess.run(["git", "add", "-A"], cwd=cwd, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "fix: AutoPatch generated patch"],
+        cwd=cwd, check=True, capture_output=True, text=True,
+    )
+
+    # 5. Push（token 嵌入 HTTPS URL，支持私有仓库）
+    remote_url = (
+        f"https://x-access-token:{token}@github.com/"
+        f"{repo_info.owner}/{repo_info.repo}.git"
+    )
+    result = subprocess.run(
+        ["git", "push", remote_url, branch],
+        cwd=cwd, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        # 分支已存在时追加时间戳后缀重试一次
+        if "already exists" in result.stderr or "rejected" in result.stderr:
+            from datetime import datetime
+            branch_retry = f"{branch}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            subprocess.run(
+                ["git", "branch", "-m", branch, branch_retry],
+                cwd=cwd, check=True, capture_output=True,
+            )
+            subprocess.run(
+                ["git", "push", remote_url, branch_retry],
+                cwd=cwd, check=True, capture_output=True, text=True,
+            )
+            logger.info("[apply] 分支已存在，重命名为 %s 后成功 push", branch_retry)
+        else:
+            raise subprocess.CalledProcessError(
+                result.returncode, "git push", result.stdout, result.stderr
+            )
+
+
 async def _generate_and_save_diff(
     tmp_dir: str,
     issue_number: int,
@@ -428,15 +536,15 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
     interrupted，可通过 POST /api/patch/resume 恢复。
     """
     # 超出并发上限时立即拒绝，避免无限排队
-    try:
-        await asyncio.wait_for(_pipeline_semaphore.acquire(), timeout=0)
-    except asyncio.TimeoutError:
+    # 注意：asyncio 单线程，_value 检查与 acquire 之间无 await，不存在竞态
+    if _pipeline_semaphore._value <= 0:
         yield sse_event({
             "type": "error",
             "message": f"服务器繁忙，最多支持 {_MAX_CONCURRENT} 个并发任务，请稍后重试",
         })
         yield sse_event({"type": "done"})
         return
+    await _pipeline_semaphore.acquire()
 
     start_ms = int(time.time() * 1000)
     workspace = None
@@ -619,15 +727,14 @@ async def resume_pipeline(task_id: str) -> AsyncGenerator[str, None]:
 async def _resume_pipeline_inner(task_id: str) -> AsyncGenerator[str, None]:
     """resume_pipeline 主体（在 task_id 锁保护下执行；自行管理并发信号量）。"""
     # 超出并发上限时立即拒绝
-    try:
-        await asyncio.wait_for(_pipeline_semaphore.acquire(), timeout=0)
-    except asyncio.TimeoutError:
+    if _pipeline_semaphore._value <= 0:
         yield sse_event({
             "type": "error",
             "message": f"服务器繁忙，最多支持 {_MAX_CONCURRENT} 个并发任务，请稍后重试",
         })
         yield sse_event({"type": "done"})
         return
+    await _pipeline_semaphore.acquire()
 
     start_ms = int(time.time() * 1000)
     _ws_token = None
@@ -743,6 +850,46 @@ async def _resume_pipeline_inner(task_id: str) -> AsyncGenerator[str, None]:
 async def health():
     """健康检查。"""
     return {"status": "ok", "service": "AutoPatch"}
+
+
+@fastapi_app.post("/api/preview", dependencies=[Depends(_verify_api_key)])
+async def preview_endpoint(req: PatchRequest):
+    """轻量预览：获取 Issue 详情 + 仓库元数据，不克隆仓库、不运行 Agent。"""
+    try:
+        repo_info = parse_github_url(req.repoUrl)
+    except ValueError as e:
+        raise HTTPException(400, detail=f"无效的仓库地址: {e}")
+
+    client = GitHubClient()
+    loop = asyncio.get_running_loop()
+    try:
+        issue, meta = await asyncio.gather(
+            loop.run_in_executor(None, client.fetch_issue, repo_info, req.issueNumber),
+            loop.run_in_executor(None, client.fetch_repo_metadata, repo_info),
+        )
+    except Exception as e:
+        status_code = getattr(getattr(e, "response", None), "status_code", None)
+        if status_code == 401:
+            raise HTTPException(401, detail="GitHub Token 无效或已过期，请更新 .env 中的 GITHUB_TOKEN")
+        if status_code == 404:
+            raise HTTPException(404, detail=f"Issue #{req.issueNumber} 在 {repo_info.full_name} 中不存在")
+        if status_code == 403:
+            raise HTTPException(429, detail="GitHub API 速率限制，请设置 GITHUB_TOKEN 或稍后重试")
+        raise HTTPException(502, detail=f"GitHub API 请求失败: {e}")
+
+    return PreviewResponse(
+        issueTitle=issue.title,
+        issueBody=issue.body,
+        issueState=issue.state,
+        issueLabels=issue.labels,
+        commentCount=len(issue.comments),
+        issueUrl=issue.html_url,
+        repoLanguage=meta.get("language", "Unknown"),
+        repoStars=meta.get("stars", 0),
+        repoPrivate=meta.get("private", False),
+        repoDescription=meta.get("description", ""),
+        defaultBranch=meta.get("default_branch", "main"),
+    )
 
 
 _SSE_HEADERS = {

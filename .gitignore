@@ -47,8 +47,8 @@ frontend/.vite/
 # 评测结果（包含运行产物和 patch，不提交）
 eval/results/
 
-# 生成的补丁文件目录（取消注释可忽略）
-# patches/
+# 生成的补丁文件目录
+patches/
 
 # 任务元数据目录（包含本地路径，不应提交）
 tasks/

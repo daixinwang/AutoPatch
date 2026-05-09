@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { CheckCircle2, Copy, Check, GitPullRequest, FileCode2, Plus, Minus, Clock, Layers, ExternalLink, Loader2 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { countDiffLines, formatElapsed } from '../lib/utils'
@@ -10,12 +10,15 @@ interface Props {
   issue:   string
 }
 
+type PRStatus = 'idle' | 'creating' | 'success' | 'error'
+
 export default function ResultArea({ result, repoUrl, issue }: Props) {
   const [copied, setCopied] = useState(false)
-  type PRStatus = 'idle' | 'creating' | 'success' | 'error'
   const [prStatus, setPrStatus] = useState<PRStatus>('idle')
   const [prUrl,    setPrUrl]    = useState('')
   const [prError,  setPrError]  = useState('')
+  const abortRef = useRef<AbortController | null>(null)
+  useEffect(() => () => { abortRef.current?.abort() }, [])
   const { added, removed }  = countDiffLines(result.diffContent)
   const isPassed            = result.reviewResult.trim().toUpperCase().startsWith('PASS')
 
@@ -26,17 +29,25 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
   }
 
   async function handleCreatePR() {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setPrStatus('creating')
     setPrError('')
     try {
+      const issueNum = parseInt(issue, 10)
+      if (isNaN(issueNum) || issueNum <= 0) throw new Error('Invalid issue number')
+
       const res = await fetch('/api/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           repoUrl:     repoUrl,
-          issueNumber: Number(issue),
+          issueNumber: issueNum,
           diffContent: result.diffContent,
         }),
+        signal: controller.signal,
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({ detail: 'Unknown error' }))
@@ -45,8 +56,9 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
       const { prUrl: url } = await res.json()
       setPrUrl(url)
       setPrStatus('success')
-    } catch (e: any) {
-      setPrError(e.message ?? 'Failed to create PR')
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === 'AbortError') return
+      setPrError(e instanceof Error ? e.message : 'Failed to create PR')
       setPrStatus('error')
     }
   }

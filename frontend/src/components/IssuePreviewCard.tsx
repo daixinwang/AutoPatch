@@ -1,5 +1,6 @@
 import { CircleDot, Tag, Code2, Star, MessageSquare, ExternalLink, Rocket } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { useT } from '../contexts/LanguageContext'
 import type { IssuePreview } from '../types'
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function IssuePreviewCard({ preview, onStartPipeline }: Props) {
+  const t = useT()
   const isOpen = preview.issueState === 'open'
 
   return (
@@ -26,7 +28,7 @@ export default function IssuePreviewCard({ preview, onStartPipeline }: Props) {
               : 'bg-text-muted/15 text-text-muted',
           )}>
             <CircleDot className="h-3 w-3" />
-            {isOpen ? 'Open' : 'Closed'}
+            {isOpen ? t.issue.open : t.issue.closed}
           </span>
         </div>
 
@@ -53,7 +55,7 @@ export default function IssuePreviewCard({ preview, onStartPipeline }: Props) {
           style={{ backgroundColor: 'var(--bg-surface)' }}>
           <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed"
             style={{ color: 'var(--text-secondary)' }}>
-            {preview.issueBody || '（暂无正文）'}
+            {preview.issueBody || t.issue.noBody}
           </pre>
         </div>
 
@@ -64,7 +66,7 @@ export default function IssuePreviewCard({ preview, onStartPipeline }: Props) {
             <MetaItem icon={<Code2 className="h-3 w-3" />} value={preview.repoLanguage} />
           )}
           <MetaItem icon={<Star className="h-3 w-3" />} value={String(preview.repoStars)} />
-          <MetaItem icon={<MessageSquare className="h-3 w-3" />} value={`${preview.commentCount} 条评论`} />
+          <MetaItem icon={<MessageSquare className="h-3 w-3" />} value={t.issue.comments(preview.commentCount)} />
           <a
             href={preview.issueUrl}
             target="_blank"
@@ -72,7 +74,7 @@ export default function IssuePreviewCard({ preview, onStartPipeline }: Props) {
             className="ml-auto flex items-center gap-1 text-xs text-brand hover:underline"
           >
             <ExternalLink className="h-3 w-3" />
-            在 GitHub 查看
+            {t.issue.viewOnGitHub}
           </a>
         </div>
 
@@ -90,7 +92,7 @@ export default function IssuePreviewCard({ preview, onStartPipeline }: Props) {
         >
           <span className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
           <Rocket className="h-4 w-4" />
-          Confirm &amp; Start Auto-Fix
+          {t.issue.confirmStart}
         </button>
       </div>
     </section>

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { CheckCircle2, Copy, Check, GitPullRequest, FileCode2, Plus, Minus, Clock, Layers, ExternalLink, Loader2 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { countDiffLines, formatElapsed } from '../lib/utils'
+import { useT } from '../contexts/LanguageContext'
 import type { TaskResult } from '../types'
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
 type PRStatus = 'idle' | 'creating' | 'success' | 'error'
 
 export default function ResultArea({ result, repoUrl, issue }: Props) {
+  const t = useT()
   const [copied, setCopied] = useState(false)
   const [prStatus, setPrStatus] = useState<PRStatus>('idle')
   const [prUrl,    setPrUrl]    = useState('')
@@ -80,7 +82,7 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
             </div>
             <div>
               <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                {isPassed ? 'Patch Generated Successfully' : 'Review Failed'}
+                {isPassed ? t.result.successTitle : t.result.failTitle}
               </p>
               <p className="text-xs text-text-secondary mt-0.5 max-w-md">
                 {result.reviewResult.split('\n')[0]}
@@ -90,17 +92,17 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
 
           {/* 统计数据 */}
           <div className="flex flex-wrap gap-3">
-            <Stat icon={<Plus className="h-3 w-3" />}  label="Added"   value={`+${added}`}   color="text-accent-green" />
-            <Stat icon={<Minus className="h-3 w-3" />} label="Removed" value={`-${removed}`} color="text-accent-red" />
-            <Stat icon={<Layers className="h-3 w-3" />} label="Steps"  value={result.stepCount} />
-            <Stat icon={<Clock className="h-3 w-3" />}  label="Time"   value={formatElapsed(result.elapsedMs)} />
+            <Stat icon={<Plus className="h-3 w-3" />}  label={t.result.added}   value={`+${added}`}   color="text-accent-green" />
+            <Stat icon={<Minus className="h-3 w-3" />} label={t.result.removed} value={`-${removed}`} color="text-accent-red" />
+            <Stat icon={<Layers className="h-3 w-3" />} label={t.result.steps}  value={result.stepCount} />
+            <Stat icon={<Clock className="h-3 w-3" />}  label={t.result.time}   value={formatElapsed(result.elapsedMs)} />
           </div>
         </div>
 
         {/* 变更文件列表 */}
         {result.changedFiles.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2 border-t border-bg-border pt-4">
-            <span className="text-xs text-text-muted mr-1">Changed:</span>
+            <span className="text-xs text-text-muted mr-1">{t.result.changed}</span>
             {result.changedFiles.map(f => (
               <span
                 key={f}
@@ -149,7 +151,7 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
                 style={{ borderColor: '#22d3a5', backgroundColor: 'rgba(34,211,165,0.1)', color: '#22d3a5' }}
               >
                 <ExternalLink className="h-3.5 w-3.5" />
-                View PR
+                {t.result.viewPR}
               </a>
             ) : (
               <button
@@ -161,7 +163,7 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
                 {prStatus === 'creating'
                   ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   : <GitPullRequest className="h-3.5 w-3.5" />}
-                {prStatus === 'creating' ? 'Creating…' : 'Create PR'}
+                {prStatus === 'creating' ? t.result.creating : t.result.createPR}
               </button>
             )}
 
@@ -177,7 +179,7 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
               style={!copied ? { borderColor: 'var(--bg-border)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-secondary)' } : undefined}
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              {copied ? 'Copied!' : 'Copy Diff'}
+              {copied ? t.result.copied : t.result.copyDiff}
             </button>
           </div>
         </div>
@@ -193,7 +195,7 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
         className="flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors"
         style={{ borderColor: 'var(--bg-border)', backgroundColor: 'var(--bg-surface)' }}
       >
-        <span className="text-xs text-text-muted">Apply patch:</span>
+        <span className="text-xs text-text-muted">{t.result.applyPatch}</span>
         <code className="flex-1 font-mono text-xs text-accent-blue">
           git apply issue-{issue}.diff
         </code>
@@ -204,7 +206,7 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
         <div className="rounded-lg border px-4 py-3 text-xs text-accent-red animate-slide-up"
           style={{ borderColor: 'rgba(248,113,113,0.3)', backgroundColor: 'rgba(248,113,113,0.08)' }}
         >
-          PR 创建失败：{prError}
+          {t.result.prError(prError)}
         </div>
       )}
     </section>

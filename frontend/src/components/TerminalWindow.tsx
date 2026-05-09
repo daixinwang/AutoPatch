@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { cn } from '../lib/utils'
+import { useT } from '../contexts/LanguageContext'
 import type { LogEntry, LogLevel } from '../types'
 
 interface Props {
@@ -54,6 +55,7 @@ function LogLine({ entry }: { entry: LogEntry }) {
 }
 
 export default function TerminalWindow({ logs }: Props) {
+  const t = useT()
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -82,11 +84,11 @@ export default function TerminalWindow({ logs }: Props) {
           <span className="h-3 w-3 rounded-full bg-[#febc2e] shadow-[0_0_4px_#febc2e80]" />
           <span className="h-3 w-3 rounded-full bg-[#28c840] shadow-[0_0_4px_#28c84080]" />
           <span className="mx-auto text-xs font-mono" style={{ color: 'var(--terminal-text-dim)' }}>
-            autopatch — bash
+            {t.terminal.shellTitle}
           </span>
           {logs.length > 0 && (
             <span className="text-[10px] font-mono" style={{ color: 'var(--terminal-text-dim)' }}>
-              {logs.length} lines
+              {logs.length} {t.terminal.linesUnit}
             </span>
           )}
         </div>
@@ -97,7 +99,7 @@ export default function TerminalWindow({ logs }: Props) {
             <div className="flex h-full items-center justify-center">
               <div className="flex items-center gap-2 text-xs font-mono" style={{ color: 'var(--terminal-text-dim)' }}>
                 <span className="h-2 w-2 rounded-full bg-accent-green animate-pulse" />
-                Waiting for task input...
+                {t.terminal.waiting}
               </div>
             </div>
           ) : (

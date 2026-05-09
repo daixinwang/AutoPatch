@@ -319,6 +319,50 @@ class GitHubClient:
             "private":        data.get("private", False),
         }
 
+    def create_pull_request(
+        self,
+        repo_info: RepoInfo,
+        head_branch: str,
+        base_branch: str,
+        title: str,
+        body: str,
+    ) -> str:
+        """
+        在目标仓库创建 Pull Request。
+
+        Args:
+            repo_info:    目标仓库信息
+            head_branch:  PR 的源分支（含改动）
+            base_branch:  PR 的目标分支（通常为 default_branch）
+            title:        PR 标题
+            body:         PR 描述
+
+        Returns:
+            PR 的 HTML URL（如 https://github.com/owner/repo/pull/7）
+
+        Raises:
+            requests.HTTPError: GitHub API 返回错误（如 422 分支不存在、403 无权限）
+        """
+        url = f"{repo_info.api_base}/pulls"
+        logger.info(
+            "[GitHubClient] 创建 PR: %s → %s in %s",
+            head_branch, base_branch, repo_info.full_name,
+        )
+        resp = self._session.post(
+            url,
+            json={
+                "title": title,
+                "body":  body,
+                "head":  head_branch,
+                "base":  base_branch,
+            },
+            timeout=REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        pr_url = resp.json()["html_url"]
+        logger.info("[GitHubClient] ✅ PR 已创建: %s", pr_url)
+        return pr_url
+
 
 # ══════════════════════════════════════════════
 # 仓库克隆管理

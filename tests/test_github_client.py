@@ -65,3 +65,50 @@ class TestIssueToPromptText:
         assert "I can reproduce this." in text
         assert "Same here." in text
         assert "open" in text
+
+
+# ── GitHubClient.create_pull_request ───────────────────────
+
+
+class TestCreatePullRequest:
+    def test_returns_pr_url(self, monkeypatch):
+        from unittest.mock import MagicMock
+        from github_client import GitHubClient, parse_github_url
+
+        client = GitHubClient(token="fake-token")
+        repo_info = parse_github_url("owner/repo")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"html_url": "https://github.com/owner/repo/pull/7"}
+        mock_resp.raise_for_status = MagicMock()
+        monkeypatch.setattr(client._session, "post", lambda *a, **kw: mock_resp)
+
+        url = client.create_pull_request(
+            repo_info=repo_info,
+            head_branch="autopatch/issue-42",
+            base_branch="main",
+            title="[AutoPatch] Fix issue #42",
+            body="Closes #42",
+        )
+        assert url == "https://github.com/owner/repo/pull/7"
+
+    def test_raises_on_http_error(self, monkeypatch):
+        import requests
+        from unittest.mock import MagicMock
+        from github_client import GitHubClient, parse_github_url
+
+        client = GitHubClient(token="fake-token")
+        repo_info = parse_github_url("owner/repo")
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = requests.HTTPError("403 Forbidden")
+        monkeypatch.setattr(client._session, "post", lambda *a, **kw: mock_resp)
+
+        with pytest.raises(requests.HTTPError):
+            client.create_pull_request(
+                repo_info=repo_info,
+                head_branch="autopatch/issue-42",
+                base_branch="main",
+                title="[AutoPatch] Fix issue #42",
+                body="Closes #42",
+            )

@@ -20,23 +20,23 @@ export default function InputSection({ status, onSubmit, onReset, onPreview, pre
 
   const isRunning = status === 'running'
   const isDone    = status === 'success' || status === 'failed'
+  const canSubmit = !!repo.trim() && !!issue.trim()
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!repo.trim() || !issue.trim()) return
+    if (!canSubmit) return
     onSubmit({ repoUrl: repo.trim(), issueNumber: issue.trim() })
   }
 
   return (
     <section className="animate-slide-up w-full">
       <form onSubmit={handleSubmit}>
-        {/* 单行输入 bar */}
         <div
-          className="flex items-center gap-0 overflow-hidden rounded-xl border transition-all focus-within:ring-2 focus-within:ring-brand/15"
+          className="flex items-center overflow-hidden rounded-xl border transition-all focus-within:ring-2 focus-within:ring-brand/15"
           style={{ borderColor: 'var(--bg-border)', backgroundColor: 'var(--bg-card)' }}
         >
-          {/* Repo 输入 */}
-          <div className="flex flex-1 items-center min-w-0 px-3">
+          {/* Repo 输入（弹性伸缩，占大部分空间） */}
+          <div className="flex flex-[3] items-center min-w-0 px-3">
             <span className="shrink-0 text-xs text-text-muted select-none pr-1">
               {t.input.repoPrefix}
             </span>
@@ -56,10 +56,10 @@ export default function InputSection({ status, onSubmit, onReset, onPreview, pre
           </div>
 
           {/* 竖向分隔线 */}
-          <div className="h-5 w-px flex-shrink-0" style={{ backgroundColor: 'var(--bg-border)' }} />
+          <div className="h-5 w-px shrink-0" style={{ backgroundColor: 'var(--bg-border)' }} />
 
-          {/* Issue 输入 */}
-          <div className="flex items-center px-3 w-28 flex-shrink-0">
+          {/* Issue 输入（自适应，可压缩，最小 64px） */}
+          <div className="flex flex-[1] items-center min-w-[64px] px-3">
             <span className="shrink-0 text-xs text-text-muted select-none pr-1">#</span>
             <input
               type="number"
@@ -69,79 +69,68 @@ export default function InputSection({ status, onSubmit, onReset, onPreview, pre
               min="1"
               disabled={isRunning}
               className={cn(
-                'w-full bg-transparent py-3 text-sm font-mono outline-none',
+                'w-full min-w-0 bg-transparent py-3 text-sm font-mono outline-none',
                 'placeholder:text-text-muted',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
+                // 隐藏数字输入的上下箭头
+                '[appearance:textfield]',
+                '[&::-webkit-outer-spin-button]:appearance-none',
+                '[&::-webkit-inner-spin-button]:appearance-none',
               )}
               style={{ color: 'var(--text-primary)' }}
             />
           </div>
 
           {/* 竖向分隔线 */}
-          <div className="h-5 w-px flex-shrink-0" style={{ backgroundColor: 'var(--bg-border)' }} />
+          <div className="h-5 w-px shrink-0" style={{ backgroundColor: 'var(--bg-border)' }} />
 
-          {/* 按钮区 */}
-          <div className="flex items-center gap-1 px-2 flex-shrink-0">
-            {/* Start / Running 按钮 */}
-            <button
-              type="submit"
-              disabled={isRunning || !repo.trim() || !issue.trim()}
-              className={cn(
-                'relative flex items-center gap-1.5 overflow-hidden rounded-lg px-3 py-1.5 text-sm font-medium',
-                'transition-all duration-200',
-                isRunning
-                  ? 'cursor-not-allowed text-brand-glow'
-                  : 'bg-brand text-white hover:bg-brand-dim',
-                'disabled:opacity-60',
-              )}
-            >
-              {!isRunning && (
+          {/* 按钮区：状态驱动，同一位置切换 */}
+          <div className="flex shrink-0 items-center gap-1 px-2">
+            {isRunning ? (
+              /* 运行中：仅显示 loading 指示，不可点击 */
+              <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span className="hidden sm:inline">{t.input.agentWorking}</span>
+              </div>
+            ) : isDone ? (
+              /* 完成后：重置按钮 */
+              <button
+                type="button"
+                onClick={onReset}
+                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-all hover:border-brand/30 hover:text-text-primary animate-fade-in"
+                style={{ borderColor: 'var(--bg-border)', backgroundColor: 'transparent', color: 'var(--text-secondary)' }}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t.input.resetBtn}</span>
+              </button>
+            ) : previewStatus === 'success' ? (
+              /* 预览成功后：Preview 按钮变为 Start */
+              <button
+                type="submit"
+                disabled={!canSubmit}
+                className={cn(
+                  'relative flex items-center gap-1.5 overflow-hidden rounded-lg px-3 py-1.5 text-sm font-medium',
+                  'bg-brand text-white transition-all hover:bg-brand-dim disabled:opacity-60',
+                )}
+              >
                 <span className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-              )}
-              {isRunning
-                ? <Loader2 className="h-4 w-4 animate-spin" />
-                : <Rocket className="h-3.5 w-3.5" />
-              }
-              <span className="hidden sm:inline">
-                {isRunning ? t.input.agentWorking : t.input.startBtn}
-              </span>
-            </button>
-
-            {/* 预览按钮 */}
-            {!isRunning && (
+                <Rocket className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t.input.startBtn}</span>
+              </button>
+            ) : (
+              /* 默认：预览按钮 */
               <button
                 type="button"
                 onClick={() => onPreview({ repoUrl: repo.trim(), issueNumber: issue.trim() })}
-                disabled={!repo.trim() || !issue.trim() || previewStatus === 'loading'}
+                disabled={!canSubmit || previewStatus === 'loading'}
                 className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-all hover:border-brand/30 hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{
-                  borderColor:     'var(--bg-border)',
-                  backgroundColor: 'transparent',
-                  color:           'var(--text-secondary)',
-                }}
+                style={{ borderColor: 'var(--bg-border)', backgroundColor: 'transparent', color: 'var(--text-secondary)' }}
               >
                 {previewStatus === 'loading'
                   ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   : <Eye className="h-3.5 w-3.5" />
                 }
                 <span className="hidden sm:inline">{t.input.previewBtn}</span>
-              </button>
-            )}
-
-            {/* 重置按钮 */}
-            {isDone && (
-              <button
-                type="button"
-                onClick={onReset}
-                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-all hover:border-brand/30 hover:text-text-primary animate-fade-in"
-                style={{
-                  borderColor:     'var(--bg-border)',
-                  backgroundColor: 'transparent',
-                  color:           'var(--text-secondary)',
-                }}
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t.input.resetBtn}</span>
               </button>
             )}
           </div>

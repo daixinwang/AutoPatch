@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle2, Copy, Check, GitPullRequest, FileCode2, Plus, Minus, Clock, Layers } from 'lucide-react'
+import { CheckCircle2, Copy, Check, GitPullRequest, FileCode2, Plus, Minus, Clock, Layers, ExternalLink, Loader2 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { countDiffLines, formatElapsed } from '../lib/utils'
 import type { TaskResult } from '../types'
@@ -12,6 +12,10 @@ interface Props {
 
 export default function ResultArea({ result, repoUrl, issue }: Props) {
   const [copied, setCopied] = useState(false)
+  type PRStatus = 'idle' | 'creating' | 'success' | 'error'
+  const [prStatus, setPrStatus] = useState<PRStatus>('idle')
+  const [prUrl,    setPrUrl]    = useState('')
+  const [prError,  setPrError]  = useState('')
   const { added, removed }  = countDiffLines(result.diffContent)
   const isPassed            = result.reviewResult.trim().toUpperCase().startsWith('PASS')
 
@@ -19,6 +23,32 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
     await navigator.clipboard.writeText(result.diffContent)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleCreatePR() {
+    setPrStatus('creating')
+    setPrError('')
+    try {
+      const res = await fetch('/api/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repoUrl:     repoUrl,
+          issueNumber: Number(issue),
+          diffContent: result.diffContent,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ detail: 'Unknown error' }))
+        throw new Error(data.detail ?? 'Unknown error')
+      }
+      const { prUrl: url } = await res.json()
+      setPrUrl(url)
+      setPrStatus('success')
+    } catch (e: any) {
+      setPrError(e.message ?? 'Failed to create PR')
+      setPrStatus('error')
+    }
   }
 
   return (
@@ -97,17 +127,32 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Create PR 按钮 */}
-            <a
-              href={`https://github.com/${repoUrl}/issues/${issue}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-all hover:border-brand/30 hover:text-text-primary"
-              style={{ borderColor: 'var(--bg-border)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-secondary)' }}
-            >
-              <GitPullRequest className="h-3.5 w-3.5" />
-              View Issue
-            </a>
+            {/* Create PR / View PR 按钮 */}
+            {prStatus === 'success' ? (
+              <a
+                href={prUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all"
+                style={{ borderColor: '#22d3a5', backgroundColor: 'rgba(34,211,165,0.1)', color: '#22d3a5' }}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                View PR
+              </a>
+            ) : (
+              <button
+                onClick={handleCreatePR}
+                disabled={prStatus === 'creating'}
+                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-all hover:border-brand/30 hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ borderColor: 'var(--bg-border)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-secondary)' }}
+              >
+                {prStatus === 'creating'
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <GitPullRequest className="h-3.5 w-3.5" />}
+                {prStatus === 'creating' ? 'Creating…' : 'Create PR'}
+              </button>
+            )}
+
             {/* Copy 按钮 */}
             <button
               onClick={copyDiff}
@@ -141,6 +186,15 @@ export default function ResultArea({ result, repoUrl, issue }: Props) {
           git apply issue-{issue}.diff
         </code>
       </div>
+
+      {/* PR 创建错误提示 */}
+      {prStatus === 'error' && (
+        <div className="rounded-lg border px-4 py-3 text-xs text-accent-red animate-slide-up"
+          style={{ borderColor: 'rgba(248,113,113,0.3)', backgroundColor: 'rgba(248,113,113,0.08)' }}
+        >
+          PR 创建失败：{prError}
+        </div>
+      )}
     </section>
   )
 }

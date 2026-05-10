@@ -143,16 +143,11 @@ export default function App() {
               {/* 顶部弹性区（2份） */}
               <div style={{ flex: 2 }} />
 
-              {/* 内容块：标题 + 输入框 */}
-              <div className="w-full max-w-3xl flex flex-col gap-10">
-                <div className="text-center space-y-3">
-                  <h1 className="text-3xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                    {locale.app.greeting}
-                  </h1>
-                  <p className="text-base" style={{ color: 'var(--text-muted)' }}>
-                    {locale.app.greetingSub}
-                  </p>
-                </div>
+              {/* 内容块：副标题 + 输入框 */}
+              <div className="w-full max-w-3xl flex flex-col gap-4">
+                <p className="text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                  {locale.app.greetingSub}
+                </p>
                 <div className="space-y-4">
                   <InputSection
                     status={status}

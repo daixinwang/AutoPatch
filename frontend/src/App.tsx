@@ -140,6 +140,15 @@ export default function App() {
             /* 空闲态 — 垂直居中 */
             <div className="flex flex-1 items-center justify-center">
               <div className="w-full max-w-3xl space-y-5">
+                {/* 引导文字 */}
+                <div className="text-center space-y-2">
+                  <h1 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                    {locale.app.greeting}
+                  </h1>
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                    {locale.app.greetingSub}
+                  </p>
+                </div>
                 <InputSection
                   status={status}
                   repo={lastInput.repoUrl}

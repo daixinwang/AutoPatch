@@ -63,6 +63,8 @@ export const zh = {
   },
   app: {
     previewFailed: (msg: string) => `预览失败：${msg}`,
+    greeting:    '今天想修复哪个 Issue？',
+    greetingSub: '输入仓库地址和 Issue 编号，AI 将自动分析并生成补丁',
   },
   footer: {
     text: 'AutoPatch · Built with LangGraph + React · Open Source',

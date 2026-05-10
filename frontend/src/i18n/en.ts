@@ -65,6 +65,8 @@ export const en: Locale = {
   },
   app: {
     previewFailed: (msg: string) => `Preview failed: ${msg}`,
+    greeting:    'What would you like to fix today?',
+    greetingSub: 'Enter a repository and issue number — AI will analyze and generate a patch',
   },
   footer: {
     text: 'AutoPatch · Built with LangGraph + React · Open Source',

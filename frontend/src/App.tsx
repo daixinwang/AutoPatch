@@ -85,7 +85,7 @@ export default function App() {
   return (
     <LanguageContext.Provider value={locale}>
     <div
-      className="flex min-h-screen bg-grid-pattern transition-colors"
+      className="flex h-screen overflow-hidden bg-grid-pattern transition-colors"
       style={{ backgroundColor: 'var(--bg-base)' }}
     >
       {/* 顶部渐变光晕 */}
@@ -106,7 +106,7 @@ export default function App() {
       </div>
 
       {/* 右侧主内容 */}
-      <div className="flex flex-1 flex-col min-w-0">
+      <div className="flex flex-1 flex-col min-w-0 overflow-y-auto">
         <Header
           themeMode={themeMode}
           onThemeChange={setThemeMode}
@@ -208,9 +208,6 @@ export default function App() {
           )}
         </main>
 
-        <footer className="mt-auto py-6 text-center text-xs text-text-muted">
-          {locale.footer.text}
-        </footer>
       </div>
     </div>
     </LanguageContext.Provider>

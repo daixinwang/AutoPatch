@@ -1,4 +1,4 @@
-import { Rocket, Loader2, RotateCcw, Eye } from 'lucide-react'
+import { Loader2, RotateCcw, Eye } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useT } from '../contexts/LanguageContext'
 import type { PatchInput, TaskStatus } from '../types'
@@ -104,22 +104,8 @@ export default function InputSection({ status, repo, issue, onRepoChange, onIssu
                 <RotateCcw className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">{t.input.resetBtn}</span>
               </button>
-            ) : previewStatus === 'success' ? (
-              /* 预览成功后：Preview 按钮变为 Start */
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className={cn(
-                  'relative flex items-center gap-1.5 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium',
-                  'bg-brand text-white transition-all hover:bg-brand-dim disabled:opacity-60',
-                )}
-              >
-                <span className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                <Rocket className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t.input.startBtn}</span>
-              </button>
             ) : (
-              /* 默认：预览按钮 */
+              /* 默认：预览按钮（始终显示，不因预览成功而切换） */
               <button
                 type="button"
                 onClick={() => onPreview({ repoUrl: repo.trim(), issueNumber: issue.trim() })}

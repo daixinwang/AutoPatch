@@ -67,6 +67,12 @@ git apply patches/issue-1_20260510_120000.diff
 <!-- screenshot: idle input state -->
 ![Dashboard idle state](docs/images/dashboard-idle.png)
 
+<!-- screenshot: agent pipeline running mid-task -->
+![Dashboard running](docs/images/dashboard-running.png)
+
+<!-- screenshot: completed result with diff preview and Create PR button -->
+![Dashboard result](docs/images/dashboard-result.png)
+
 The dashboard provides a full-featured interface for submitting issues, monitoring the live agent workflow, and reviewing results — including a diff viewer and direct PR creation.
 
 ---
@@ -94,7 +100,7 @@ START
                         └── PASS ──► 📄 .diff file ──► END
 ```
 
-After each node completes, the full agent state is checkpointed to PostgreSQL — enabling resume after any interruption without re-running earlier stages.
+> Checkpoints are persisted to PostgreSQL after each node — enabling resume after interruption.
 
 ---
 

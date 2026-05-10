@@ -67,6 +67,12 @@ git apply patches/issue-1_20260510_120000.diff
 <!-- screenshot: idle input state -->
 ![看板空闲状态](docs/images/dashboard-idle.png)
 
+<!-- screenshot: agent pipeline running mid-task -->
+![看板运行中](docs/images/dashboard-running.png)
+
+<!-- screenshot: completed result with diff preview and Create PR button -->
+![任务完成结果](docs/images/dashboard-result.png)
+
 看板提供完整的 Web 操作界面：提交 Issue、实时监控 Agent 工作流、查看修复结果 — 包含 diff 查看器和直接创建 PR 功能。
 
 ---
@@ -94,7 +100,7 @@ START
                         └── PASS ──► 📄 .diff 文件 ──► END
 ```
 
-每个节点完成后，Agent 完整状态自动 checkpoint 保存到 PostgreSQL — 任何中断后均可无缝恢复，无需重跑已完成阶段。
+> 每个节点完成后，Agent 完整状态自动 checkpoint 保存到 PostgreSQL — 任何中断后均可无缝恢复，无需重跑已完成阶段。
 
 ---
 

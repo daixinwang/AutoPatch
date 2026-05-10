@@ -38,7 +38,7 @@ export default function InputSection({ status, repo, issue, onRepoChange, onIssu
         >
           {/* Repo 输入（弹性伸缩，占大部分空间） */}
           <div className="flex flex-[3] items-center min-w-0 px-3">
-            <span className="shrink-0 text-xs text-text-muted select-none pr-1">
+            <span className="shrink-0 text-sm text-text-muted select-none pr-1">
               {t.input.repoPrefix}
             </span>
             <input
@@ -48,7 +48,7 @@ export default function InputSection({ status, repo, issue, onRepoChange, onIssu
               placeholder={t.input.repoPlaceholder}
               disabled={isRunning}
               className={cn(
-                'flex-1 min-w-0 bg-transparent py-3 text-sm font-mono outline-none',
+                'flex-1 min-w-0 bg-transparent py-4 text-base font-mono outline-none',
                 'placeholder:text-text-muted',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
               )}
@@ -61,7 +61,7 @@ export default function InputSection({ status, repo, issue, onRepoChange, onIssu
 
           {/* Issue 输入（自适应，可压缩，最小 64px） */}
           <div className="flex flex-[1] items-center min-w-[64px] px-3">
-            <span className="shrink-0 text-xs text-text-muted select-none pr-1">#</span>
+            <span className="shrink-0 text-sm text-text-muted select-none pr-1">#</span>
             <input
               type="number"
               value={issue}
@@ -70,7 +70,7 @@ export default function InputSection({ status, repo, issue, onRepoChange, onIssu
               min="1"
               disabled={isRunning}
               className={cn(
-                'w-full min-w-0 bg-transparent py-3 text-sm font-mono outline-none',
+                'w-full min-w-0 bg-transparent py-4 text-base font-mono outline-none',
                 'placeholder:text-text-muted',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
                 // 隐藏数字输入的上下箭头
@@ -89,7 +89,7 @@ export default function InputSection({ status, repo, issue, onRepoChange, onIssu
           <div className="flex shrink-0 items-center gap-1 px-2">
             {isRunning ? (
               /* 运行中：仅显示 loading 指示，不可点击 */
-              <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>
+              <div className="flex items-center gap-1.5 px-3 py-2 text-sm" style={{ color: 'var(--text-muted)' }}>
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 <span className="hidden sm:inline">{t.input.agentWorking}</span>
               </div>
@@ -98,7 +98,7 @@ export default function InputSection({ status, repo, issue, onRepoChange, onIssu
               <button
                 type="button"
                 onClick={onReset}
-                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-all hover:border-brand/30 hover:text-text-primary animate-fade-in"
+                className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-all hover:border-brand/30 hover:text-text-primary animate-fade-in"
                 style={{ borderColor: 'var(--bg-border)', backgroundColor: 'transparent', color: 'var(--text-secondary)' }}
               >
                 <RotateCcw className="h-3.5 w-3.5" />
@@ -110,7 +110,7 @@ export default function InputSection({ status, repo, issue, onRepoChange, onIssu
                 type="submit"
                 disabled={!canSubmit}
                 className={cn(
-                  'relative flex items-center gap-1.5 overflow-hidden rounded-lg px-3 py-1.5 text-sm font-medium',
+                  'relative flex items-center gap-1.5 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium',
                   'bg-brand text-white transition-all hover:bg-brand-dim disabled:opacity-60',
                 )}
               >
@@ -124,7 +124,7 @@ export default function InputSection({ status, repo, issue, onRepoChange, onIssu
                 type="button"
                 onClick={() => onPreview({ repoUrl: repo.trim(), issueNumber: issue.trim() })}
                 disabled={!canSubmit || previewStatus === 'loading'}
-                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-all hover:border-brand/30 hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-all hover:border-brand/30 hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ borderColor: 'var(--bg-border)', backgroundColor: 'transparent', color: 'var(--text-secondary)' }}
               >
                 {previewStatus === 'loading'

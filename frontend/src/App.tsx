@@ -137,40 +137,43 @@ export default function App() {
               />
             </div>
           ) : status === 'idle' ? (
-            /* 空闲态 — 垂直居中 */
-            <div className="flex flex-1 items-center justify-center">
-              <div className="w-full max-w-3xl space-y-5">
+            /* 空闲态 — 垂直居中（整体上移半个引导区高度，使输入框视觉居中） */
+            <div className="flex flex-1 items-center justify-center px-6 pb-16">
+              <div className="w-full max-w-3xl flex flex-col gap-10">
                 {/* 引导文字 */}
-                <div className="text-center space-y-2">
-                  <h1 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                <div className="text-center space-y-3">
+                  <h1 className="text-3xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
                     {locale.app.greeting}
                   </h1>
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                  <p className="text-base" style={{ color: 'var(--text-muted)' }}>
                     {locale.app.greetingSub}
                   </p>
                 </div>
-                <InputSection
-                  status={status}
-                  repo={lastInput.repoUrl}
-                  issue={lastInput.issueNumber}
-                  onRepoChange={handleRepoChange}
-                  onIssueChange={handleIssueChange}
-                  onSubmit={handleSubmit}
-                  onReset={reset}
-                  onPreview={handlePreview}
-                  previewStatus={previewStatus}
-                />
-                {showPreviewErr && (
-                  <div className="card-gradient-border px-4 py-3 text-sm text-accent-red animate-slide-up">
-                    {locale.app.previewFailed(previewError ?? '')}
-                  </div>
-                )}
-                {showPreview && (
-                  <IssuePreviewCard
-                    preview={preview}
-                    onStartPipeline={() => handleSubmit(lastInput)}
+                {/* 输入框 + 预览结果（内部小间距） */}
+                <div className="space-y-4">
+                  <InputSection
+                    status={status}
+                    repo={lastInput.repoUrl}
+                    issue={lastInput.issueNumber}
+                    onRepoChange={handleRepoChange}
+                    onIssueChange={handleIssueChange}
+                    onSubmit={handleSubmit}
+                    onReset={reset}
+                    onPreview={handlePreview}
+                    previewStatus={previewStatus}
                   />
-                )}
+                  {showPreviewErr && (
+                    <div className="card-gradient-border px-4 py-3 text-sm text-accent-red animate-slide-up">
+                      {locale.app.previewFailed(previewError ?? '')}
+                    </div>
+                  )}
+                  {showPreview && (
+                    <IssuePreviewCard
+                      preview={preview}
+                      onStartPipeline={() => handleSubmit(lastInput)}
+                    />
+                  )}
+                </div>
               </div>
             </div>
           ) : (

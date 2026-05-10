@@ -143,9 +143,9 @@ export default function App() {
               {/* 顶部弹性区（2份） */}
               <div style={{ flex: 2 }} />
 
-              {/* 内容块：副标题 + 输入框 */}
-              <div className="w-full max-w-3xl flex flex-col gap-4">
-                <p className="text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+              {/* 内容块：提示文字 + 输入框 */}
+              <div className="w-full max-w-3xl flex flex-col gap-14">
+                <p className="text-center text-3xl font-normal tracking-tight" style={{ color: 'var(--text-primary)' }}>
                   {locale.app.greetingSub}
                 </p>
                 <div className="space-y-4">

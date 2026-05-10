@@ -73,7 +73,7 @@ The dashboard provides a full-featured interface for submitting issues, monitori
 
 ## Architecture
 
-```
+```text
 START
   │
   ▼
@@ -201,7 +201,7 @@ git apply patches/issue-42_20260402_120000.diff
 
 ## CLI Options
 
-```
+```text
 python autopatch.py <repo_url> <issue_number> [options]
 
 Options:
@@ -217,7 +217,7 @@ Options:
 ## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
+| ----- | ---------- |
 | Agent Framework | [LangGraph](https://github.com/langchain-ai/langgraph) 0.2.x |
 | LLM | OpenAI GPT-4o (via `langchain-openai`, token streaming enabled) |
 | Code Search | Python AST + `re` (no external deps) |
@@ -244,10 +244,4 @@ Options:
 
 ---
 
-<div align="center">
-
 Made with ❤️ using LangGraph + React
-
-[⬆ Back to top](#)
-
-</div>

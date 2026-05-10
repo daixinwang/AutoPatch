@@ -6,7 +6,7 @@
 
 **AI 驱动的 GitHub Issue 自动修复 Agent**
 
-输入 Issue 编号，自动分析、修复、生成补丁 — 基于多智能体流水线。
+*输入 Issue 编号，自动分析、修复、生成补丁 — 基于多智能体流水线。*
 
 [English](README.md)
 
@@ -53,7 +53,7 @@ git apply patches/issue-1_20260510_120000.diff
 - 📄 **标准 `.diff` 输出** — 通过 `git apply` 应用，无需手动修改
 - 🌊 **Token 级实时流式输出** — LLM 输出逐字符流入终端窗口
 
-**新增功能：**
+**本版本新增：**
 
 - ♻️ **断点续传** — 任务中断后可从上次保存的 checkpoint 恢复，无需重新运行（需配置 `DATABASE_URL`）
 - 🔀 **一键创建 PR** — 在结果页直接调用 GitHub API 提交 Pull Request
@@ -240,13 +240,13 @@ python autopatch.py <repo_url> <issue_number> [选项]
 
 ## 安全设计
 
-- **工具权限分层**：Coder（读+写+搜索）、TestRunner（仅执行）、Reviewer（仅读）
+- **工具权限分层** — Coder（读+写+搜索）、TestRunner（仅执行）、Reviewer（仅读）
 - **路径遍历防护** — 所有文件操作限定在工作目录内，拒绝绝对路径和 `../` 遍历
-- **命令执行沙箱**：白名单制（`pytest`、`python`、`npm test`、`cargo test`、`go test`、`mvn test`、`gradle test`、`make test`），超时限制（最大 120 秒），输出截断（最大 8KB）
+- **命令执行沙箱** — 白名单制（`pytest`、`python`、`npm test`、`cargo test`、`go test`、`mvn test`、`gradle test`、`make test`），超时限制（最大 120 秒），输出截断（最大 8KB）
 - **API 认证** — 通过 `AUTOPATCH_API_KEY` 环境变量启用 Bearer token 认证，保护所有写入端点
 - **Task ID 校验** — 强制 UUID 格式，防止路径注入
-- **并发保护**：信号量限制同时进行的流水线数量（`MAX_CONCURRENT_PATCHES`），防止资源耗尽
-- **API Key 保护**：通过 `.env` 加载，`.gitignore` 强制排除，绝不提交
+- **并发保护** — 信号量限制同时进行的流水线数量（`MAX_CONCURRENT_PATCHES`），防止资源耗尽
+- **API Key 保护** — 通过 `.env` 加载，`.gitignore` 强制排除，绝不提交
 
 ---
 

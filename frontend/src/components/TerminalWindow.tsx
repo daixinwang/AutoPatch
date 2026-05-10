@@ -94,7 +94,7 @@ export default function TerminalWindow({ logs }: Props) {
         </div>
 
         {/* 日志内容区 */}
-        <div className="h-72 overflow-y-auto px-4 py-3 space-y-1">
+        <div className="h-[32rem] overflow-y-auto px-4 py-3 space-y-1">
           {logs.length === 0 ? (
             <div className="flex h-full items-center justify-center">
               <div className="flex items-center gap-2 text-xs font-mono" style={{ color: 'var(--terminal-text-dim)' }}>

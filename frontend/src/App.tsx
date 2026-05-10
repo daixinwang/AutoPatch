@@ -137,11 +137,15 @@ export default function App() {
               />
             </div>
           ) : status === 'idle' ? (
-            /* 空闲态 — 三段式布局：引导文字贴底 + 输入框精确居中 + 底部弹性区 */
-            <div className="flex flex-1 flex-col px-6">
-              {/* 上半弹性区：引导文字贴底对齐，与输入框保持 gap-10 */}
-              <div className="flex flex-1 flex-col items-center justify-end pb-10">
-                <div className="w-full max-w-3xl text-center space-y-3">
+            /* 空闲态 — GPT 比例：顶部弹性 2 : 内容块 : 底部弹性 3
+               内容块中心落在可用高度约 40% 处，与 ChatGPT 视觉比例一致 */
+            <div className="flex flex-1 flex-col items-center px-6">
+              {/* 顶部弹性区（2份） */}
+              <div style={{ flex: 2 }} />
+
+              {/* 内容块：标题 + 输入框 */}
+              <div className="w-full max-w-3xl flex flex-col gap-10">
+                <div className="text-center space-y-3">
                   <h1 className="text-3xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
                     {locale.app.greeting}
                   </h1>
@@ -149,36 +153,34 @@ export default function App() {
                     {locale.app.greetingSub}
                   </p>
                 </div>
-              </div>
-
-              {/* 输入框（位于绝对垂直中心） */}
-              <div className="w-full max-w-3xl mx-auto space-y-4">
-                <InputSection
-                  status={status}
-                  repo={lastInput.repoUrl}
-                  issue={lastInput.issueNumber}
-                  onRepoChange={handleRepoChange}
-                  onIssueChange={handleIssueChange}
-                  onSubmit={handleSubmit}
-                  onReset={reset}
-                  onPreview={handlePreview}
-                  previewStatus={previewStatus}
-                />
-                {showPreviewErr && (
-                  <div className="card-gradient-border px-4 py-3 text-sm text-accent-red animate-slide-up">
-                    {locale.app.previewFailed(previewError ?? '')}
-                  </div>
-                )}
-                {showPreview && (
-                  <IssuePreviewCard
-                    preview={preview}
-                    onStartPipeline={() => handleSubmit(lastInput)}
+                <div className="space-y-4">
+                  <InputSection
+                    status={status}
+                    repo={lastInput.repoUrl}
+                    issue={lastInput.issueNumber}
+                    onRepoChange={handleRepoChange}
+                    onIssueChange={handleIssueChange}
+                    onSubmit={handleSubmit}
+                    onReset={reset}
+                    onPreview={handlePreview}
+                    previewStatus={previewStatus}
                   />
-                )}
+                  {showPreviewErr && (
+                    <div className="card-gradient-border px-4 py-3 text-sm text-accent-red animate-slide-up">
+                      {locale.app.previewFailed(previewError ?? '')}
+                    </div>
+                  )}
+                  {showPreview && (
+                    <IssuePreviewCard
+                      preview={preview}
+                      onStartPipeline={() => handleSubmit(lastInput)}
+                    />
+                  )}
+                </div>
               </div>
 
-              {/* 下半弹性区（与上半等高，保证输入框居中） */}
-              <div className="flex-1" />
+              {/* 底部弹性区（3份） */}
+              <div style={{ flex: 3 }} />
             </div>
           ) : (
             /* 运行中 / 结果 — 顶部对齐 */

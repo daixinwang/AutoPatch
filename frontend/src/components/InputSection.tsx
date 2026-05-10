@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Rocket, Loader2, RotateCcw, Eye } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useT } from '../contexts/LanguageContext'
@@ -7,16 +6,18 @@ import type { PreviewStatus } from '../hooks/useIssuePreview'
 
 interface Props {
   status:        TaskStatus
+  repo:          string
+  issue:         string
+  onRepoChange:  (v: string) => void
+  onIssueChange: (v: string) => void
   onSubmit:      (input: PatchInput) => void
   onReset:       () => void
   onPreview:     (input: PatchInput) => void
   previewStatus: PreviewStatus
 }
 
-export default function InputSection({ status, onSubmit, onReset, onPreview, previewStatus }: Props) {
+export default function InputSection({ status, repo, issue, onRepoChange, onIssueChange, onSubmit, onReset, onPreview, previewStatus }: Props) {
   const t = useT()
-  const [repo,  setRepo]  = useState('daixinwang/AutoPatch')
-  const [issue, setIssue] = useState('42')
 
   const isRunning = status === 'running'
   const isDone    = status === 'success' || status === 'failed'
@@ -43,7 +44,7 @@ export default function InputSection({ status, onSubmit, onReset, onPreview, pre
             <input
               type="text"
               value={repo}
-              onChange={e => setRepo(e.target.value)}
+              onChange={e => onRepoChange(e.target.value)}
               placeholder={t.input.repoPlaceholder}
               disabled={isRunning}
               className={cn(
@@ -64,7 +65,7 @@ export default function InputSection({ status, onSubmit, onReset, onPreview, pre
             <input
               type="number"
               value={issue}
-              onChange={e => setIssue(e.target.value)}
+              onChange={e => onIssueChange(e.target.value)}
               placeholder={t.input.issuePlaceholder}
               min="1"
               disabled={isRunning}

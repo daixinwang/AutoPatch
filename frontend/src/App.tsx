@@ -27,6 +27,9 @@ export default function App() {
     repoUrl: 'daixinwang/AutoPatch',
     issueNumber: '42',
   })
+
+  function handleRepoChange(v: string)  { setLastInput(p => ({ ...p, repoUrl: v })) }
+  function handleIssueChange(v: string) { setLastInput(p => ({ ...p, issueNumber: v })) }
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
@@ -139,6 +142,10 @@ export default function App() {
               <div className="w-full max-w-3xl space-y-5">
                 <InputSection
                   status={status}
+                  repo={lastInput.repoUrl}
+                  issue={lastInput.issueNumber}
+                  onRepoChange={handleRepoChange}
+                  onIssueChange={handleIssueChange}
                   onSubmit={handleSubmit}
                   onReset={reset}
                   onPreview={handlePreview}
@@ -162,6 +169,10 @@ export default function App() {
             <div className="mx-auto w-full max-w-3xl space-y-5 py-10">
               <InputSection
                 status={status}
+                repo={lastInput.repoUrl}
+                issue={lastInput.issueNumber}
+                onRepoChange={handleRepoChange}
+                onIssueChange={handleIssueChange}
                 onSubmit={handleSubmit}
                 onReset={reset}
                 onPreview={handlePreview}
@@ -169,7 +180,7 @@ export default function App() {
               />
               {showPreviewErr && (
                 <div className="card-gradient-border px-4 py-3 text-sm text-accent-red animate-slide-up">
-                  预览失败：{previewError}
+                  {locale.app.previewFailed(previewError ?? '')}
                 </div>
               )}
               {showWorkflow && <TerminalWindow logs={logs} />}

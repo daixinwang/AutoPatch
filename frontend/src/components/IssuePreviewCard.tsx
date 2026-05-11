@@ -83,14 +83,18 @@ export default function IssuePreviewCard({ preview, onStartPipeline }: Props) {
           type="button"
           onClick={onStartPipeline}
           className={cn(
-            'relative w-full flex items-center justify-center gap-2 overflow-hidden',
-            'rounded-lg px-6 py-2.5 text-sm font-semibold text-white',
-            'bg-gradient-to-r from-brand-dim to-brand',
-            'transition-all duration-200',
-            'hover:from-brand hover:to-accent-purple hover:shadow-glow-brand',
+            'w-full flex items-center justify-center gap-2',
+            'rounded-lg border px-6 py-2.5 text-sm font-semibold',
+            'transition-colors duration-150',
           )}
+          style={{
+            borderColor:     'var(--bg-border)',
+            backgroundColor: 'var(--bg-card)',
+            color:           'var(--text-primary)',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--bg-hover)' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--bg-card)' }}
         >
-          <span className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
           <Rocket className="h-4 w-4" />
           {t.issue.confirmStart}
         </button>

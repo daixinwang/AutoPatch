@@ -472,8 +472,9 @@ def _git_apply_and_push(
         f"https://x-access-token:{token}@github.com/"
         f"{repo_info.owner}/{repo_info.repo}.git"
     )
+    git_push_cmd = ["git", "-c", "credential.helper=", "push", remote_url, branch]
     result = subprocess.run(
-        ["git", "push", remote_url, branch],
+        git_push_cmd,
         cwd=cwd, capture_output=True, text=True,
     )
     if result.returncode != 0:
@@ -486,7 +487,7 @@ def _git_apply_and_push(
                 cwd=cwd, check=True, capture_output=True,
             )
             subprocess.run(
-                ["git", "push", remote_url, branch_retry],
+                ["git", "-c", "credential.helper=", "push", remote_url, branch_retry],
                 cwd=cwd, check=True, capture_output=True, text=True,
             )
             logger.info("[apply] 分支已存在，重命名为 %s 后成功 push", branch_retry)

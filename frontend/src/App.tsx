@@ -24,14 +24,24 @@ export default function App() {
   const locale = lang === 'zh' ? zh : en
 
   const [lastInput, setLastInput] = useState<PatchInput>({
-    repoUrl: 'daixinwang/AutoPatch',
-    issueNumber: '42',
+    repoUrl: 'daixinwang/bug-test',
+    issueNumber: '1',
   })
 
   function handleRepoChange(v: string)  { setLastInput(p => ({ ...p, repoUrl: v })) }
   function handleIssueChange(v: string) { setLastInput(p => ({ ...p, issueNumber: v })) }
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [headerScrolled, setHeaderScrolled] = useState(false)
+  const rightPaneRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = rightPaneRef.current
+    if (!el) return
+    const onScroll = () => setHeaderScrolled(el.scrollTop > 0)
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
 
   // 任务完成后自动存入历史记录
   const savedRef = useRef<string | null>(null)
@@ -91,29 +101,25 @@ export default function App() {
       {/* 顶部渐变光晕 */}
       <div className="pointer-events-none fixed inset-x-0 top-0 h-72 bg-gradient-radial from-brand/8 via-transparent to-transparent" />
 
-      {/* 左侧侧边栏（带折叠动画） */}
-      <div
-        className="flex-shrink-0 overflow-hidden transition-all duration-200"
-        style={{ width: sidebarOpen ? 240 : 0 }}
-      >
-        <Sidebar
-          records={records}
-          selectedId={selectedHistoryId}
-          onNewFix={handleNewFix}
-          onSelect={setSelectedHistoryId}
-          onCollapse={() => setSidebarOpen(false)}
-        />
-      </div>
+      {/* 左侧侧边栏 */}
+      <Sidebar
+        records={records}
+        selectedId={selectedHistoryId}
+        onNewFix={handleNewFix}
+        onSelect={setSelectedHistoryId}
+        onCollapse={() => setSidebarOpen(false)}
+        collapsed={!sidebarOpen}
+        onExpand={() => setSidebarOpen(true)}
+      />
 
       {/* 右侧主内容 */}
-      <div className="flex flex-1 flex-col min-w-0 overflow-y-auto">
+      <div ref={rightPaneRef} className="flex flex-1 flex-col min-w-0 overflow-y-auto">
         <Header
           themeMode={themeMode}
           onThemeChange={setThemeMode}
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen(o => !o)}
           lang={lang}
           onLangChange={setLang}
+          scrolled={headerScrolled}
         />
 
         <main className="flex flex-1 flex-col px-6">

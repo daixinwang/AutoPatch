@@ -1,16 +1,15 @@
-import { Sun, Moon, Monitor, PanelLeftOpen } from 'lucide-react'
+import { Sun, Moon, Monitor } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useT } from '../contexts/LanguageContext'
 import type { ThemeMode } from '../hooks/useTheme'
 import type { Lang } from '../hooks/useLanguage'
 
 interface Props {
-  themeMode:       ThemeMode
-  onThemeChange:   (mode: ThemeMode) => void
-  sidebarOpen:     boolean
-  onToggleSidebar: () => void
-  lang:            Lang
-  onLangChange:    (lang: Lang) => void
+  themeMode:     ThemeMode
+  onThemeChange: (mode: ThemeMode) => void
+  lang:          Lang
+  onLangChange:  (lang: Lang) => void
+  scrolled:      boolean
 }
 
 const THEME_OPTIONS: { mode: ThemeMode; icon: React.ReactNode }[] = [
@@ -24,30 +23,22 @@ const LANG_OPTIONS: { value: Lang; label: string }[] = [
   { value: 'en', label: 'EN' },
 ]
 
-export default function Header({ themeMode, onThemeChange, sidebarOpen, onToggleSidebar, lang, onLangChange }: Props) {
+export default function Header({ themeMode, onThemeChange, lang, onLangChange, scrolled }: Props) {
   const t = useT()
 
   return (
     <header
-      className="sticky top-0 z-50 backdrop-blur-xl transition-colors"
-      style={{ backgroundColor: 'var(--bg-base-alpha)' }}
+      className="sticky top-0 z-50 backdrop-blur-xl transition-colors border-b"
+      style={{
+        backgroundColor: 'var(--bg-base-alpha)',
+        borderColor: scrolled ? 'var(--bg-border)' : 'transparent',
+      }}
     >
       <div className="flex h-14 items-center justify-between px-4">
-        {/* 左侧：展开按钮（折叠时显示）+ 标题 */}
-        <div className="flex items-center gap-2">
-          {!sidebarOpen && (
-            <button
-              onClick={onToggleSidebar}
-              className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
-              title={t.sidebar.expand}
-            >
-              <PanelLeftOpen className="h-5 w-5" />
-            </button>
-          )}
-          <span className="text-xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-            AutoPatch
-          </span>
-        </div>
+        {/* 左侧：标题 */}
+        <span className="text-xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+          AutoPatch
+        </span>
 
         {/* 右侧操作 */}
         <div className="flex items-center gap-3">

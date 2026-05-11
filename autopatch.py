@@ -49,7 +49,7 @@ load_dotenv()
 
 # 本地模块
 from github_client import GitHubClient, RepoWorkspace, parse_github_url
-from diff_generator import (
+from core.diff_generator import (
     generate_diff,
     get_changed_files,
     print_diff_summary,

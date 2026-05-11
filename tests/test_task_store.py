@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from task_store import TaskStore
+from core.task_store import TaskStore
 
 
 @pytest.fixture()

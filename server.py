@@ -64,7 +64,7 @@ from core.diff_generator import generate_diff, get_changed_files, write_diff_fil
 from agent.graph import build_graph, AgentState
 from langchain_core.messages import HumanMessage
 from tools.workspace import set_workspace, reset_workspace
-from task_store import TaskStore
+from core.task_store import TaskStore
 from core.config import MAX_CONCURRENT_PATCHES as _CFG_MAX_CONCURRENT, DB_POOL_MAX_SIZE, RECURSION_LIMIT
 
 setup_logging()

@@ -38,7 +38,7 @@ async def test_list_tasks_empty():
 async def test_delete_nonexistent_task(monkeypatch, tmp_path):
     """DELETE /api/tasks/{random-uuid} returns 404 for a task that does not exist."""
     import server
-    from task_store import TaskStore
+    from core.task_store import TaskStore
 
     # Ensure task_store is initialised so the endpoint doesn't short-circuit with 503
     monkeypatch.setattr(server, "task_store", TaskStore(tasks_dir=tmp_path / "tasks"))

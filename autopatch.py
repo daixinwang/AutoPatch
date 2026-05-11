@@ -40,7 +40,7 @@ import logging
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 
-from logging_config import setup_logging
+from core.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
 

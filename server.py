@@ -57,7 +57,7 @@ from pydantic import BaseModel
 
 import logging
 
-from logging_config import setup_logging
+from core.logging_config import setup_logging
 
 from github_client import GitHubClient, RepoWorkspace, parse_github_url
 from diff_generator import generate_diff, get_changed_files, write_diff_file

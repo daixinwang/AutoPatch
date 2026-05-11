@@ -46,7 +46,7 @@ from tools.search_tools import (
     search_codebase,
 )
 from tools.execute_tools import run_pytest, run_python_script, run_test_command
-from config import (
+from core.config import (
     MAX_CODER_STEPS,
     MAX_MESSAGE_CHARS,
     MAX_REVIEW_RETRIES,

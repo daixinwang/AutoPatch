@@ -21,13 +21,15 @@ Point AutoPatch at any GitHub issue and get a ready-to-apply patch in minutes.
 **Web UI:**
 
 1. Enter a repository URL and issue number, then click **Run AutoPatch**
-2. Watch the live agent pipeline: Planner → Coder → TestRunner → Reviewer
-3. Download the generated `.diff` or click **Create PR** to open a pull request directly
 
-<!-- screenshot: agent pipeline running mid-task -->
+![Dashboard idle state](docs/images/dashboard-idle.png)
+
+2. Watch the live agent pipeline: Planner → Coder → TestRunner → Reviewer
+
 ![Dashboard running](docs/images/dashboard-running.png)
 
-<!-- screenshot: completed result with diff preview and Create PR button -->
+3. Download the generated `.diff` or click **Create PR** to open a pull request directly
+
 ![Dashboard result](docs/images/dashboard-result.png)
 
 **CLI:**
@@ -59,21 +61,6 @@ git apply patches/issue-1_20260510_120000.diff
 - 🔀 **Create PR** — One-click GitHub Pull Request creation directly from the result page
 - 🌐 **i18n interface** — Web Dashboard supports Chinese / English toggle
 - 📋 **History sidebar** — All tasks are persisted and accessible from a collapsible sidebar
-
----
-
-## Web Dashboard
-
-<!-- screenshot: idle input state -->
-![Dashboard idle state](docs/images/dashboard-idle.png)
-
-<!-- screenshot: agent pipeline running mid-task -->
-![Dashboard running](docs/images/dashboard-running.png)
-
-<!-- screenshot: completed result with diff preview and Create PR button -->
-![Dashboard result](docs/images/dashboard-result.png)
-
-The dashboard provides a full-featured interface for submitting issues, monitoring the live agent workflow, and reviewing results — including a diff viewer and direct PR creation.
 
 ---
 

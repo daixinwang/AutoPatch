@@ -21,13 +21,15 @@
 **Web 界面：**
 
 1. 输入仓库地址和 Issue 编号，点击 **Run AutoPatch**
-2. 实时观看 Agent 流水线运行：Planner → Coder → TestRunner → Reviewer
-3. 下载生成的 `.diff` 文件，或点击 **Create PR** 直接创建 Pull Request
 
-<!-- screenshot: agent pipeline running mid-task -->
+![看板空闲状态](docs/images/dashboard-idle.png)
+
+2. 实时观看 Agent 流水线运行：Planner → Coder → TestRunner → Reviewer
+
 ![看板运行中](docs/images/dashboard-running.png)
 
-<!-- screenshot: completed result with diff preview and Create PR button -->
+3. 下载生成的 `.diff` 文件，或点击 **Create PR** 直接创建 Pull Request
+
 ![任务完成结果](docs/images/dashboard-result.png)
 
 **命令行：**
@@ -59,21 +61,6 @@ git apply patches/issue-1_20260510_120000.diff
 - 🔀 **一键创建 PR** — 在结果页直接调用 GitHub API 提交 Pull Request
 - 🌐 **中英文界面** — Web 看板支持中/英文切换
 - 📋 **历史记录侧边栏** — 所有任务持久化存储，随时从可折叠侧边栏回溯历史结果
-
----
-
-## Web 看板
-
-<!-- screenshot: idle input state -->
-![看板空闲状态](docs/images/dashboard-idle.png)
-
-<!-- screenshot: agent pipeline running mid-task -->
-![看板运行中](docs/images/dashboard-running.png)
-
-<!-- screenshot: completed result with diff preview and Create PR button -->
-![任务完成结果](docs/images/dashboard-result.png)
-
-看板提供完整的 Web 操作界面：提交 Issue、实时监控 Agent 工作流、查看修复结果 — 包含 diff 查看器和直接创建 PR 功能。
 
 ---
 

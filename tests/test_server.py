@@ -123,7 +123,7 @@ class TestGitApplyAndPush:
 
     def test_applies_diff_and_commits(self, tmp_path, monkeypatch):
         import subprocess
-        from github_client import parse_github_url
+        from core.github_client import parse_github_url
         from server import _git_apply_and_push
 
         repo = self._make_repo_with_file(tmp_path)
@@ -161,7 +161,7 @@ class TestGitApplyAndPush:
         """无效 diff 应导致 CalledProcessError，且不留下临时文件。"""
         import subprocess
         import glob
-        from github_client import parse_github_url
+        from core.github_client import parse_github_url
         from server import _git_apply_and_push
 
         repo = self._make_repo_with_file(tmp_path)

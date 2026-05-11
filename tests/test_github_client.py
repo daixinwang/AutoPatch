@@ -7,7 +7,7 @@ No network access required.
 
 import pytest
 
-from github_client import GitHubIssue, RepoInfo, parse_github_url
+from core.github_client import GitHubIssue, RepoInfo, parse_github_url
 
 
 # ── parse_github_url ────────────────────────────────────────
@@ -73,7 +73,7 @@ class TestIssueToPromptText:
 class TestCreatePullRequest:
     def test_returns_pr_url(self, monkeypatch):
         from unittest.mock import MagicMock
-        from github_client import GitHubClient, parse_github_url
+        from core.github_client import GitHubClient, parse_github_url
 
         client = GitHubClient(token="fake-token")
         repo_info = parse_github_url("owner/repo")
@@ -95,7 +95,7 @@ class TestCreatePullRequest:
     def test_raises_on_http_error(self, monkeypatch):
         import requests
         from unittest.mock import MagicMock
-        from github_client import GitHubClient, parse_github_url
+        from core.github_client import GitHubClient, parse_github_url
 
         client = GitHubClient(token="fake-token")
         repo_info = parse_github_url("owner/repo")

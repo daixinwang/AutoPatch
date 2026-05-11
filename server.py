@@ -59,7 +59,7 @@ import logging
 
 from core.logging_config import setup_logging
 
-from github_client import GitHubClient, RepoWorkspace, parse_github_url
+from core.github_client import GitHubClient, RepoWorkspace, parse_github_url
 from core.diff_generator import generate_diff, get_changed_files, write_diff_file
 from agent.graph import build_graph, AgentState
 from langchain_core.messages import HumanMessage

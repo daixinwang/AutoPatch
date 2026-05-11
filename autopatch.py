@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # 本地模块
-from github_client import GitHubClient, RepoWorkspace, parse_github_url
+from core.github_client import GitHubClient, RepoWorkspace, parse_github_url
 from core.diff_generator import (
     generate_diff,
     get_changed_files,

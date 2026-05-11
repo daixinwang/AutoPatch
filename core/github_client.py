@@ -31,7 +31,7 @@ from urllib.parse import urlparse
 import requests
 from dotenv import load_dotenv
 
-from core.config import GITHUB_RETRY_BACKOFF_BASE, GITHUB_RETRY_MAX_ATTEMPTS
+from .config import GITHUB_RETRY_BACKOFF_BASE, GITHUB_RETRY_MAX_ATTEMPTS
 
 load_dotenv()
 

@@ -65,7 +65,23 @@ class InstanceEvaluator:
             instance_id=self.instance.instance_id,
             repo=self.instance.repo,
         )
-        env = InstanceEnvironment(self.instance, self.config)
+        # Select environment and test runner based on config
+        if self.config.use_docker:
+            from eval.docker_env import DockerEnvironment
+            from eval.verify import run_tests_docker
+            env = DockerEnvironment(self.instance, self.config)
+            def _run_tests(test_ids, ws, **kw):
+                return run_tests_docker(
+                    test_ids,
+                    env.container_name,
+                    ws,
+                    container_path=env._container_path,
+                    **kw,
+                )
+        else:
+            env = InstanceEnvironment(self.instance, self.config)
+            _run_tests = run_tests
+
         t0 = time.time()
 
         try:
@@ -75,7 +91,7 @@ class InstanceEvaluator:
 
             # 2. 基线验证：FAIL_TO_PASS 应该失败
             if self.instance.fail_to_pass:
-                baseline = run_tests(
+                baseline = _run_tests(
                     self.instance.fail_to_pass,
                     workspace_str,
                     repo=self.instance.repo,
@@ -112,7 +128,7 @@ class InstanceEvaluator:
 
             # 5. 验证 FAIL_TO_PASS
             if self.instance.fail_to_pass:
-                result.fail_to_pass_results = run_tests(
+                result.fail_to_pass_results = _run_tests(
                     self.instance.fail_to_pass,
                     workspace_str,
                     repo=self.instance.repo,
@@ -121,7 +137,7 @@ class InstanceEvaluator:
 
             # 6. 验证 PASS_TO_PASS
             if self.instance.pass_to_pass:
-                result.pass_to_pass_results = run_tests(
+                result.pass_to_pass_results = _run_tests(
                     self.instance.pass_to_pass,
                     workspace_str,
                     repo=self.instance.repo,

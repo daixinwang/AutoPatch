@@ -11,7 +11,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 import logging
 
@@ -75,7 +75,7 @@ class InstanceEnvironment:
         self.config = config
         self.workspace: Optional[Path] = None
         self._worktree_created = False
-        self.test_patch_files: set = set()
+        self.test_patch_files: Set[str] = set()
 
     def setup(self) -> Path:
         """
@@ -137,6 +137,14 @@ class InstanceEnvironment:
             capture_output=True,
             text=True,
         )
+        if result.returncode != 0:
+            logger.warning(
+                "  [InstanceEnv] git diff --name-only 失败（exit %d），"
+                "test_patch_files 将为空，eval diff 可能包含测试文件改动: %s",
+                result.returncode,
+                result.stderr[:200],
+            )
+            return set()
         return {
             line.strip()
             for line in result.stdout.splitlines()

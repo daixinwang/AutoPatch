@@ -14,10 +14,11 @@ Git diff 生成器。
 """
 
 import logging
+import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Set, Union
 
 logger = logging.getLogger(__name__)
 
@@ -213,7 +214,6 @@ def print_diff_summary(diff_content: str) -> None:
     removed = diff_content.count("\n-") - diff_content.count("\n---")
 
     # 提取变更的文件名
-    import re
     changed_files = re.findall(r"^diff --git a/(.+?) b/", diff_content, re.MULTILINE)
 
     logger.info(f"📊 Diff 摘要:")
@@ -226,7 +226,7 @@ def print_diff_summary(diff_content: str) -> None:
             logger.info(f"     • {f}")
 
 
-def filter_diff(diff: str, exclude_paths: set) -> str:
+def filter_diff(diff: str, exclude_paths: Set[str]) -> str:
     """
     从 unified diff 字符串中过滤掉指定文件的 diff 块。
 
@@ -241,15 +241,14 @@ def filter_diff(diff: str, exclude_paths: set) -> str:
         过滤后的 diff 字符串；若无剩余块则返回空字符串
     """
     if not diff or not exclude_paths:
-        return diff
+        return diff or ""
 
-    import re as _re
-    blocks = _re.split(r"(?=^diff --git )", diff, flags=_re.MULTILINE)
+    blocks = re.split(r"(?=^diff --git )", diff, flags=re.MULTILINE)
     result = []
     for block in blocks:
         if not block.strip():
             continue
-        m = _re.match(r"^diff --git a/(.+?) b/", block)
+        m = re.match(r"^diff --git a/(.+?) b/", block)
         if m and m.group(1) in exclude_paths:
             continue
         result.append(block)

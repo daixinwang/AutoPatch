@@ -23,7 +23,7 @@ from pathlib import Path
 
 from langchain_core.tools import tool
 
-from tools.workspace import resolve_workspace_path
+from tools.workspace import resolve_workspace_path, get_workspace
 
 import logging
 
@@ -357,4 +357,64 @@ def run_test_command(
     except Exception as e:
         error_msg = f"[错误] run_test_command 执行失败: {type(e).__name__}: {e}"
         logger.error(f"  [Tool: run_test_command] {error_msg}")
+        return error_msg
+
+
+# ──────────────────────────────────────────────
+# 工具 4：验证 Python 模块是否可正常 import
+# ──────────────────────────────────────────────
+@tool
+def verify_importable(file_path: str) -> str:
+    """
+    验证修改后的 Python 源文件是否可以正常 import（检测语法错误和循环依赖）。
+
+    在修改任何 Python 源文件后调用此工具，确保没有破坏模块的可导入性。
+
+    Args:
+        file_path: 要验证的 Python 文件路径（相对于工作目录，如 "sympy/printing/ccode.py"）
+
+    Returns:
+        成功时返回 "[成功] 模块可正常导入：<module_name>"；
+        失败时返回包含完整错误信息的字符串。
+    """
+    logger.debug(f"  [Tool: verify_importable] 验证文件: {file_path}")
+    try:
+        path = resolve_workspace_path(file_path)
+
+        if not path.exists():
+            return f"[错误] 文件不存在: {file_path}"
+        if path.suffix.lower() != ".py":
+            return f"[错误] 只支持 .py 文件，收到: {file_path}"
+
+        # 将相对路径转换为模块名
+        # 例：sympy/printing/ccode.py → sympy.printing.ccode
+        rel = Path(file_path).as_posix().removesuffix(".py")
+        module_name = rel.replace("/", ".")
+
+        cwd = get_workspace()
+        result = _run_subprocess(
+            [sys.executable, "-c", f"import {module_name}"],
+            cwd=cwd,
+            timeout=15,
+        )
+
+        if result["timed_out"]:
+            return (
+                f"[超时] import {module_name} 超时（15s），"
+                "可能存在循环导入，请检查模块级 import 语句"
+            )
+
+        if result["returncode"] == 0:
+            logger.info(f"  [Tool: verify_importable] ✅ 可正常导入: {module_name}")
+            return f"[成功] 模块可正常导入：{module_name}"
+
+        error_output = _truncate_output(result["stderr"] or result["stdout"])
+        logger.warning(f"  [Tool: verify_importable] ❌ 导入失败: {module_name}")
+        return (
+            f"[失败] import {module_name} 出错，请修复后重试：\n{error_output}"
+        )
+
+    except Exception as e:
+        error_msg = f"[错误] verify_importable 执行失败: {type(e).__name__}: {e}"
+        logger.error(f"  [Tool: verify_importable] {error_msg}")
         return error_msg

@@ -96,9 +96,10 @@ class InstanceEvaluator:
             result.review_result = agent_result.get("review_result", "")
             result.step_count = agent_result.get("step_count", 0)
 
-            # 4. 获取 Agent 生成的 diff
-            from core.diff_generator import generate_diff
-            result.agent_patch = generate_diff(workspace_str)
+            # 4. 获取 Agent 生成的 diff，过滤掉 test_patch 引入的文件
+            from core.diff_generator import generate_diff, filter_diff
+            raw_diff = generate_diff(workspace_str)
+            result.agent_patch = filter_diff(raw_diff, env.test_patch_files)
 
             # 5. 验证 FAIL_TO_PASS
             if self.instance.fail_to_pass:

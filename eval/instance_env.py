@@ -75,6 +75,7 @@ class InstanceEnvironment:
         self.config = config
         self.workspace: Optional[Path] = None
         self._worktree_created = False
+        self.test_patch_files: set = set()
 
     def setup(self) -> Path:
         """
@@ -96,9 +97,10 @@ class InstanceEnvironment:
         self.workspace = workspace
         self._worktree_created = True
 
-        # 3. apply test_patch
+        # 3. apply test_patch，并记录被修改的文件（用于后续 diff 过滤）
         if self.instance.test_patch:
             self._apply_patch(workspace, self.instance.test_patch, label="test_patch")
+            self.test_patch_files = self._get_changed_files(workspace)
 
         # 4. 安装依赖
         if self.config.install_deps:
@@ -126,6 +128,20 @@ class InstanceEnvironment:
                 shutil.rmtree(self.workspace, ignore_errors=True)
 
         self._worktree_created = False
+
+    def _get_changed_files(self, workspace: Path) -> set:
+        """返回工作区相对于 HEAD 的已修改文件路径集合。"""
+        result = subprocess.run(
+            ["git", "diff", "HEAD", "--name-only"],
+            cwd=str(workspace),
+            capture_output=True,
+            text=True,
+        )
+        return {
+            line.strip()
+            for line in result.stdout.splitlines()
+            if line.strip()
+        }
 
     # ── 内部方法 ──
 

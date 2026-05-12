@@ -224,3 +224,33 @@ def print_diff_summary(diff_content: str) -> None:
         logger.info(f"   变更文件   :")
         for f in changed_files:
             logger.info(f"     • {f}")
+
+
+def filter_diff(diff: str, exclude_paths: set) -> str:
+    """
+    从 unified diff 字符串中过滤掉指定文件的 diff 块。
+
+    用于从 agent_patch 中剔除由评测框架（test_patch）引入的测试文件改动，
+    确保 agent_patch 只包含 Agent 实际修改的内容。
+
+    Args:
+        diff:          unified diff 字符串（git diff HEAD 的输出）
+        exclude_paths: 需要排除的文件路径集合（相对于仓库根目录，如 "tests/test_foo.py"）
+
+    Returns:
+        过滤后的 diff 字符串；若无剩余块则返回空字符串
+    """
+    if not diff or not exclude_paths:
+        return diff
+
+    import re as _re
+    blocks = _re.split(r"(?=^diff --git )", diff, flags=_re.MULTILINE)
+    result = []
+    for block in blocks:
+        if not block.strip():
+            continue
+        m = _re.match(r"^diff --git a/(.+?) b/", block)
+        if m and m.group(1) in exclude_paths:
+            continue
+        result.append(block)
+    return "".join(result)

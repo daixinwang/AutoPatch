@@ -84,7 +84,11 @@ def _check_env(config=None) -> None:
     # Docker 模式下检查 Docker 是否可用
     if config is not None and config.use_docker:
         import subprocess as _sp
-        r = _sp.run(["docker", "info"], capture_output=True)
+        try:
+            r = _sp.run(["docker", "info"], capture_output=True, timeout=10)
+        except _sp.TimeoutExpired:
+            logger.error("[Error] docker info 超时，Docker Desktop 可能正在启动中")
+            sys.exit(1)
         if r.returncode != 0:
             logger.error(
                 "[Error] Docker 未启动或未安装，--docker 模式需要 Docker Desktop 运行"

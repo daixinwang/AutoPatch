@@ -47,6 +47,7 @@ class DockerEnvironment:
         self.test_patch_files: Set[str] = set()
         self._container_running: bool = False
         self._container_path: str = "/testbed"
+        self._image_pulled: bool = False
 
     @property
     def image_name(self) -> str:
@@ -77,7 +78,7 @@ class DockerEnvironment:
                  label="docker rm", check=False)
             self._container_running = False
 
-        if not self.config.keep_image:
+        if self._image_pulled and not self.config.keep_image:
             _run(["docker", "rmi", self.image_name],
                  label="docker rmi", check=False)
 
@@ -98,6 +99,7 @@ class DockerEnvironment:
             raise DockerSetupError(
                 f"docker pull failed for {self.image_name}:\n{result.stderr[:500]}"
             )
+        self._image_pulled = True
         logger.info("  [DockerEnv] Pull complete: %s", self.image_name)
 
     def _start_container(self) -> None:

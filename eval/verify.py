@@ -233,9 +233,14 @@ def run_tests_docker(
         return {tid: False for tid in test_ids}
 
     # 2. 构建测试命令
+    # SWE-bench 镜像将依赖装在 /opt/miniconda3/envs/testbed/ 中，
+    # 直接使用该环境的 Python 以避免依赖 conda 激活命令。
     runner_cfg = REPO_TEST_RUNNERS.get(repo, {})
     build_cmd = runner_cfg.get("build_cmd", _build_pytest_cmd)
     test_cmd_parts = build_cmd(test_ids, container_path)
+    # 将 "python" 替换为 miniconda testbed 环境的完整路径
+    if test_cmd_parts and test_cmd_parts[0] == "python":
+        test_cmd_parts[0] = "/opt/miniconda3/envs/testbed/bin/python"
     inner_cmd = f"cd {container_path} && " + " ".join(test_cmd_parts)
 
     # 3. 在容器内运行测试

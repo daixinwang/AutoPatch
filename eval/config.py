@@ -39,6 +39,11 @@ class EvalConfig:
     run_id: Optional[str] = None
     resume: bool = True
 
+    # ── Docker ──
+    use_docker: bool = False
+    docker_image_prefix: str = "swebench/sweb.eval.x86_64"
+    keep_image: bool = False
+
     def resolve_run_id(self) -> str:
         if self.run_id is None:
             self.run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -70,6 +75,14 @@ class EvalConfig:
         p.add_argument("--run-id", default=None)
         p.add_argument("--no-resume", action="store_true")
 
+        p.add_argument("--docker", action="store_true", default=False)
+        p.add_argument("--keep-image", action="store_true", default=False)
+        p.add_argument(
+            "--docker-image-prefix",
+            default="swebench/sweb.eval.x86_64",
+            dest="docker_image_prefix",
+        )
+
         args = p.parse_args(argv)
 
         return cls(
@@ -90,4 +103,7 @@ class EvalConfig:
             results_dir=args.results_dir,
             run_id=args.run_id,
             resume=not args.no_resume,
+            use_docker=args.docker,
+            docker_image_prefix=args.docker_image_prefix,
+            keep_image=args.keep_image,
         )

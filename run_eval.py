@@ -40,7 +40,7 @@ def main() -> int:
     config = EvalConfig.from_cli()
 
     # 环境检查
-    _check_env()
+    _check_env(config)
 
     logger.info("=" * 50)
     logger.info("  AutoPatch SWE-bench Evaluation")
@@ -59,7 +59,7 @@ def main() -> int:
     return 0 if metrics.total_instances > 0 else 1
 
 
-def _check_env() -> None:
+def _check_env(config=None) -> None:
     """检查必要的环境变量和依赖。"""
     import os
     from dotenv import load_dotenv
@@ -80,6 +80,17 @@ def _check_env() -> None:
     except ImportError:
         logger.error("[Error] 缺少 datasets 库，请安装: pip install datasets")
         sys.exit(1)
+
+    # Docker 模式下检查 Docker 是否可用
+    if config is not None and config.use_docker:
+        import subprocess as _sp
+        r = _sp.run(["docker", "info"], capture_output=True)
+        if r.returncode != 0:
+            logger.error(
+                "[Error] Docker 未启动或未安装，--docker 模式需要 Docker Desktop 运行"
+            )
+            sys.exit(1)
+        logger.info("[OK] Docker 可用")
 
 
 if __name__ == "__main__":

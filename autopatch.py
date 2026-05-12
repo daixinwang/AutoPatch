@@ -228,7 +228,7 @@ def main() -> int:
     """
     setup_logging()
 
-    from config import validate_required_env
+    from core.config import validate_required_env
     try:
         validate_required_env()
     except EnvironmentError as e:

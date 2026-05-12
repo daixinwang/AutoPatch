@@ -581,13 +581,14 @@ def reviewer_node(state: AgentState) -> dict:
 
     # 提取最终结论（最后一条 AI 消息的内容）
     conclusion: str = resp.content.strip()
-    # LLM 经常用 ``` 代码块包裹结论，需要先剥离再判断
-    _conclusion_inner = conclusion
-    if _conclusion_inner.startswith("```"):
-        # 去掉首行 ``` 和末尾 ```
-        lines = _conclusion_inner.splitlines()
-        lines = [l for l in lines if not l.strip().startswith("```")]
-        _conclusion_inner = "\n".join(lines).strip()
+    # LLM 经常在结论外包裹 Markdown 标题（"### 评审结论"）或代码围栏（```），
+    # 需要先剥离再判断 PASS/REJECT。
+    _lines = conclusion.splitlines()
+    _stripped_lines = [
+        l for l in _lines
+        if not l.strip().startswith("#") and not l.strip().startswith("```")
+    ]
+    _conclusion_inner = "\n".join(_stripped_lines).strip()
     is_pass = _conclusion_inner.upper().startswith("PASS")
 
     if is_pass:
@@ -648,7 +649,12 @@ def reviewer_should_continue(
     review_result = state.get("review_result", "")
     retries = state.get("review_retries", 0)
 
-    if review_result.upper().startswith("PASS"):
+    # 剥离 Markdown 标题和代码围栏后再判断 PASS
+    _inner = "\n".join(
+        l for l in review_result.splitlines()
+        if not l.strip().startswith("#") and not l.strip().startswith("```")
+    ).strip()
+    if _inner.upper().startswith("PASS"):
         logger.debug("🏁 [Router: reviewer] 评审通过 → END")
         return END
 

@@ -215,7 +215,7 @@ def run_tests_docker(
 
     # 1. 将本地改动同步回容器
     sync_result = subprocess.run(
-        ["docker", "cp", f"{container_name}:{container_path}/", f"{workspace}/."],
+        ["docker", "cp", f"{workspace}/.", f"{container_name}:{container_path}/"],
         capture_output=True,
         text=True,
         timeout=60,

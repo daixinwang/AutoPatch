@@ -35,8 +35,9 @@ class TestRunTestsDocker:
         # First call must be docker cp (sync workspace to container)
         assert calls[0][0] == "docker"
         assert calls[0][1] == "cp"
-        # must sync to /testbed by default
-        assert "autopatch_flask:/testbed/" in calls[0][2]
+        # local path is source (calls[0][2]), container path is dest (calls[0][3])
+        assert calls[0][2].endswith("/.")  # local workspace
+        assert "autopatch_flask:/testbed/" in calls[0][3]
 
         # Second call must be docker exec
         assert calls[1][0] == "docker"
@@ -63,7 +64,7 @@ class TestRunTestsDocker:
                 timeout=10,
             )
 
-        assert "autopatch_flask:/repo/" in calls[0][2]
+        assert "autopatch_flask:/repo/" in calls[0][3]
 
     def test_docker_cp_failure_returns_all_false(self):
         def fake_run(cmd, **kwargs):

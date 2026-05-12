@@ -3,9 +3,6 @@ tests/test_execute_tools.py
 ---------------------------
 Tests for tools/execute_tools.py (verify_importable).
 """
-import sys
-import textwrap
-
 import pytest
 
 from tools.execute_tools import verify_importable

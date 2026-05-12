@@ -14,6 +14,7 @@ tools/execute_tools.py
   - run_pytest        : 对指定路径运行 pytest，返回测试报告
   - run_python_script : 运行单个 Python 脚本，捕获 stdout/stderr
   - run_test_command  : 运行各语言通用测试命令（npm/cargo/go/make 等）
+  - verify_importable : 验证 Python 文件是否可正常 import（检测循环依赖和语法错误）
 """
 
 import shlex
@@ -392,6 +393,8 @@ def verify_importable(file_path: str) -> str:
         module_name = rel.replace("/", ".")
 
         cwd = get_workspace()
+        # 安全说明：命令固定为 [sys.executable, "-c", "import <module>"]，
+        # module_name 由文件路径机械转换而来（不含用户自由输入），无需 _is_safe_command 白名单校验。
         result = _run_subprocess(
             [sys.executable, "-c", f"import {module_name}"],
             cwd=cwd,

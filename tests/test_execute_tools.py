@@ -46,3 +46,15 @@ class TestVerifyImportable:
         result = verify_importable.invoke({"file_path": "mypkg/utils.py"})
         assert "成功" in result
         assert "mypkg.utils" in result
+
+    def test_src_layout(self, tmp_workspace):
+        # src/ 布局：src/mypkg/core.py → module name 应为 mypkg.core，从 src/ 运行
+        src = tmp_workspace / "src"
+        src.mkdir()
+        pkg = src / "mypkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("", encoding="utf-8")
+        (pkg / "core.py").write_text("VALUE = 1\n", encoding="utf-8")
+        result = verify_importable.invoke({"file_path": "src/mypkg/core.py"})
+        assert "成功" in result
+        assert "mypkg.core" in result

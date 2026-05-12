@@ -387,12 +387,18 @@ def verify_importable(file_path: str) -> str:
         if path.suffix.lower() != ".py":
             return f"[错误] 只支持 .py 文件，收到: {file_path}"
 
-        # 将相对路径转换为模块名
-        # 例：sympy/printing/ccode.py → sympy.printing.ccode
-        rel = Path(file_path).as_posix().removesuffix(".py")
+        # 将相对路径转换为模块名，自动处理 src/ 布局
+        # 普通布局：sympy/printing/ccode.py → sympy.printing.ccode（从 workspace 根运行）
+        # src 布局：src/flask/config.py → flask.config（从 workspace/src/ 运行）
+        workspace = Path(get_workspace())
+        if file_path.startswith("src/") and (workspace / "src").exists():
+            rel = Path(file_path[4:]).as_posix().removesuffix(".py")
+            cwd = str(workspace / "src")
+        else:
+            rel = Path(file_path).as_posix().removesuffix(".py")
+            cwd = get_workspace()
         module_name = rel.replace("/", ".")
 
-        cwd = get_workspace()
         # 安全说明：命令固定为 [sys.executable, "-c", "import <module>"]，
         # module_name 由文件路径机械转换而来（不含用户自由输入），无需 _is_safe_command 白名单校验。
         result = _run_subprocess(

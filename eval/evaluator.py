@@ -84,7 +84,16 @@ class InstanceEvaluator:
                 baseline_all_fail = all(not v for v in baseline.values())
                 result.baseline_valid = baseline_all_fail
                 if not baseline_all_fail:
-                    logger.warning(f"  [Eval] 警告: 基线验证未通过，部分 FAIL_TO_PASS 测试在修复前就通过了")
+                    logger.warning(
+                        "  [Eval] 基线验证未通过，跳过该实例"
+                        "（可能是 Python 版本不兼容或环境问题）"
+                    )
+                    result.status = "error"
+                    result.error_message = (
+                        "baseline_invalid: FAIL_TO_PASS 测试在修复前已通过，"
+                        "可能是 Python 版本不兼容（如 tomllib 需要 3.11+）或环境配置问题"
+                    )
+                    return result
 
             # 3. 运行 AutoPatch pipeline
             from autopatch import run_agent_on_issue

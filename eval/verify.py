@@ -181,3 +181,79 @@ def _parse_django_output(output: str, test_ids: List[str]) -> Optional[Dict[str,
                 results[tid] = False
 
     return results
+
+
+def run_tests_docker(
+    test_ids: List[str],
+    container_name: str,
+    workspace: str,
+    repo: str = "",
+    timeout: int = 300,
+    container_path: str = "/testbed",
+) -> Dict[str, bool]:
+    """
+    在 Docker 容器中运行测试。
+
+    流程：
+      1. docker cp <workspace>/. <container>:<container_path>/  — 同步本地改动到容器
+      2. docker exec <container> bash -c "cd <container_path> && pytest ..."
+      3. 复用现有 _parse_pytest_output / _parse_django_output 解析结果
+
+    Args:
+        test_ids:       测试标识列表
+        container_name: Docker 容器名（如 "autopatch_pallets__flask-4045"）
+        workspace:      本地工作目录路径（改动已在此处）
+        repo:           仓库名（用于选择 test runner，默认 pytest）
+        timeout:        超时秒数
+        container_path: 容器内 repo 路径（默认 "/testbed"，部分 instance 用 "/repo"）
+
+    Returns:
+        {test_id: True/False} 字典
+    """
+    if not test_ids:
+        return {}
+
+    # 1. 将本地改动同步回容器
+    sync_result = subprocess.run(
+        ["docker", "cp", f"{container_name}:{container_path}/", f"{workspace}/."],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if sync_result.returncode != 0:
+        logger.error(
+            "  [DockerVerify] docker cp failed (exit %d): %s",
+            sync_result.returncode,
+            sync_result.stderr[:200],
+        )
+        return {tid: False for tid in test_ids}
+
+    # 2. 构建测试命令
+    runner_cfg = REPO_TEST_RUNNERS.get(repo, {})
+    build_cmd = runner_cfg.get("build_cmd", _build_pytest_cmd)
+    test_cmd_parts = build_cmd(test_ids, workspace)
+    inner_cmd = f"cd {container_path} && " + " ".join(test_cmd_parts)
+
+    # 3. 在容器内运行测试
+    try:
+        result = subprocess.run(
+            ["docker", "exec", container_name, "bash", "-c", inner_cmd],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        output = result.stdout + "\n" + result.stderr
+    except subprocess.TimeoutExpired:
+        return {tid: False for tid in test_ids}
+
+    # 4. 解析输出（复用现有解析器）
+    parsed = _parse_pytest_output(output, test_ids)
+    if parsed:
+        return parsed
+
+    parsed = _parse_django_output(output, test_ids)
+    if parsed:
+        return parsed
+
+    all_pass = result.returncode == 0
+    return {tid: all_pass for tid in test_ids}

@@ -31,13 +31,18 @@ class TestDockerEnvironmentProperties:
 
     def test_image_name_default_prefix(self):
         env = self._make_env()
-        assert env.image_name == "swebench/sweb.eval.x86_64.pallets__flask-4045:latest"
+        # "__" in instance_id is replaced with "_1776_" per SWE-bench image naming
+        assert env.image_name == "swebench/sweb.eval.x86_64.pallets_1776_flask-4045:latest"
 
     def test_image_name_custom_prefix(self):
         inst = _FakeInstance()
         cfg = _FakeConfig(docker_image_prefix="myrepo/images")
         env = DockerEnvironment(inst, cfg)
-        assert env.image_name == "myrepo/images.pallets__flask-4045:latest"
+        assert env.image_name == "myrepo/images.pallets_1776_flask-4045:latest"
+
+    def test_image_name_replaces_double_underscore(self):
+        env = self._make_env("sympy__sympy-20154")
+        assert env.image_name == "swebench/sweb.eval.x86_64.sympy_1776_sympy-20154:latest"
 
     def test_container_name(self):
         env = self._make_env()

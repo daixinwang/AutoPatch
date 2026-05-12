@@ -51,7 +51,11 @@ class DockerEnvironment:
 
     @property
     def image_name(self) -> str:
-        return f"{self.config.docker_image_prefix}.{self.instance.instance_id}:latest"
+        # SWE-bench Docker 镜像命名规则：
+        # instance_id "pallets__flask-4045" → "pallets_1776_flask-4045"
+        # 即把 "__" 替换为 "_1776_"
+        image_id = self.instance.instance_id.replace("__", "_1776_")
+        return f"{self.config.docker_image_prefix}.{image_id}:latest"
 
     def setup(self) -> Path:
         """Pull image, start container, copy repo locally, apply test_patch."""

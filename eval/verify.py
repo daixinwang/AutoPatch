@@ -214,12 +214,16 @@ def run_tests_docker(
         return {}
 
     # 1. 将本地改动同步回容器
-    sync_result = subprocess.run(
-        ["docker", "cp", f"{workspace}/.", f"{container_name}:{container_path}/"],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
+    try:
+        sync_result = subprocess.run(
+            ["docker", "cp", f"{workspace}/.", f"{container_name}:{container_path}/"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        logger.error("  [DockerVerify] docker cp timed out (60s)")
+        return {tid: False for tid in test_ids}
     if sync_result.returncode != 0:
         logger.error(
             "  [DockerVerify] docker cp failed (exit %d): %s",
@@ -231,7 +235,7 @@ def run_tests_docker(
     # 2. 构建测试命令
     runner_cfg = REPO_TEST_RUNNERS.get(repo, {})
     build_cmd = runner_cfg.get("build_cmd", _build_pytest_cmd)
-    test_cmd_parts = build_cmd(test_ids, workspace)
+    test_cmd_parts = build_cmd(test_ids, container_path)
     inner_cmd = f"cd {container_path} && " + " ".join(test_cmd_parts)
 
     # 3. 在容器内运行测试

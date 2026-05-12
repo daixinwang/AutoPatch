@@ -129,7 +129,7 @@ class InstanceEnvironment:
 
         self._worktree_created = False
 
-    def _get_changed_files(self, workspace: Path) -> set:
+    def _get_changed_files(self, workspace: Path) -> Set[str]:
         """返回工作区相对于 HEAD 的已修改文件路径集合。"""
         result = subprocess.run(
             ["git", "diff", "HEAD", "--name-only"],

@@ -22,15 +22,15 @@ Point AutoPatch at any GitHub issue and get a ready-to-apply patch in minutes.
 
 1. Enter a repository URL and issue number, then click **Run AutoPatch**
 
-![Dashboard idle state](docs/images/dashboard-idle.png)
+![Dashboard idle state](assets/dashboard-idle.png)
 
 2. Watch the live agent pipeline: Planner → Coder → TestRunner → Reviewer
 
-![Dashboard running](docs/images/dashboard-running.png)
+![Dashboard running](assets/dashboard-running.png)
 
 3. Download the generated `.diff` or click **Create PR** to open a pull request directly
 
-![Dashboard result](docs/images/dashboard-result.png)
+![Dashboard result](assets/dashboard-result.png)
 
 **CLI:**
 

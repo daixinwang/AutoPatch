@@ -22,15 +22,15 @@
 
 1. 输入仓库地址和 Issue 编号，点击 **Run AutoPatch**
 
-![看板空闲状态](docs/images/dashboard-idle.png)
+![看板空闲状态](assets/dashboard-idle.png)
 
 2. 实时观看 Agent 流水线运行：Planner → Coder → TestRunner → Reviewer
 
-![看板运行中](docs/images/dashboard-running.png)
+![看板运行中](assets/dashboard-running.png)
 
 3. 下载生成的 `.diff` 文件，或点击 **Create PR** 直接创建 Pull Request
 
-![任务完成结果](docs/images/dashboard-result.png)
+![任务完成结果](assets/dashboard-result.png)
 
 **命令行：**
 

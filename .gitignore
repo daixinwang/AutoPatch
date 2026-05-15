@@ -44,6 +44,9 @@ frontend/.vite/
 *.tsbuildinfo
 
 # ── AutoPatch 产物 ─────────────────────────
+# 文档目录（plans/specs/结果等本地产物，不提交）
+docs/
+
 # 评测结果（包含运行产物和 patch，不提交）
 eval/results/
 

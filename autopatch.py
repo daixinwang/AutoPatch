@@ -199,9 +199,20 @@ def run_agent_on_issue(
                     for msg in node_output["messages"]:
                         role = type(msg).__name__
                         if role == "AIMessage" and not getattr(msg, "tool_calls", None):
-                            preview = msg.content[:120].replace("\n", " ")
+                            # Claude 可能返回 list 格式的 content（多个 content blocks）；
+                            # 提取其中的文本块，拼成纯字符串。
+                            raw = msg.content
+                            if isinstance(raw, list):
+                                text_content = " ".join(
+                                    b.get("text", "") if isinstance(b, dict) else str(b)
+                                    for b in raw
+                                    if not (isinstance(b, dict) and b.get("type") == "tool_use")
+                                )
+                            else:
+                                text_content = raw
+                            preview = text_content[:120].replace("\n", " ")
                             logger.debug(f"  💬 {preview}...")
-                            final_output = msg.content
+                            final_output = text_content
 
         logger.info(f"✅ Agent 流水线完成，共 {step_count} 步")
 

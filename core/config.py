@@ -12,12 +12,16 @@ import os
 # Reviewer 最多打回次数
 MAX_REVIEW_RETRIES: int = int(os.getenv("MAX_REVIEW_RETRIES", "3"))
 # Coder→Tool 单轮最多循环次数
-MAX_CODER_STEPS: int = int(os.getenv("MAX_CODER_STEPS", "25"))
+MAX_CODER_STEPS: int = int(os.getenv("MAX_CODER_STEPS", "40"))
 # LangGraph 递归深度限制
-RECURSION_LIMIT: int = int(os.getenv("RECURSION_LIMIT", "100"))
+RECURSION_LIMIT: int = int(os.getenv("RECURSION_LIMIT", "500"))
 
 # ── LLM ──────────────────────────────────────────────────
-OPENAI_MODEL_NAME: str = os.getenv("OPENAI_MODEL_NAME", "gpt-4o")
+# 各 Agent 专属模型，可通过同名环境变量覆盖。
+PLANNER_MODEL_NAME: str = os.getenv("PLANNER_MODEL_NAME", "claude-sonnet-4-6")
+CODER_MODEL_NAME: str = os.getenv("CODER_MODEL_NAME", "claude-sonnet-4-6")
+TEST_RUNNER_MODEL_NAME: str = os.getenv("TEST_RUNNER_MODEL_NAME", "claude-sonnet-4-6")
+REVIEWER_MODEL_NAME: str = os.getenv("REVIEWER_MODEL_NAME", "claude-sonnet-4-6")
 
 # ── 服务器 ───────────────────────────────────────────────
 MAX_CONCURRENT_PATCHES: int = int(os.getenv("MAX_CONCURRENT_PATCHES", "3"))
@@ -35,7 +39,7 @@ GITHUB_RETRY_BACKOFF_BASE: float = float(os.getenv("GITHUB_RETRY_BACKOFF_BASE", 
 
 # ── LLM Context 控制 ─────────────────────────────────────
 # Coder 进入节点时如果 messages 总字符数超过此阈值，触发硬压缩（保留 Issue + 各 Agent 摘要消息）。
-MAX_MESSAGE_CHARS: int = int(os.getenv("MAX_MESSAGE_CHARS", "60000"))
+MAX_MESSAGE_CHARS: int = int(os.getenv("MAX_MESSAGE_CHARS", "100000"))
 # Reviewer 内部循环允许的工具调用总数（防止失控）。
 MAX_REVIEWER_TOOL_CALLS: int = int(os.getenv("MAX_REVIEWER_TOOL_CALLS", "8"))
 

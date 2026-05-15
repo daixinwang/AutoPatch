@@ -6,6 +6,7 @@ eval/evaluator.py
 
 from __future__ import annotations
 
+import os
 import time
 import traceback
 from dataclasses import dataclass, field
@@ -112,12 +113,19 @@ class InstanceEvaluator:
                     return result
 
             # 3. 运行 AutoPatch pipeline
-            from autopatch import run_agent_on_issue
-            agent_result = run_agent_on_issue(
-                issue_text=self.instance.problem_statement,
-                working_dir=workspace_str,
-                repo_language="Python",
-            )
+            # Docker 模式下设置标志，让 verify_importable 工具跳过本地导入检查
+            # （本地 Python 无项目依赖，强制 import 会误导 Coder 无限重试）
+            if self.config.use_docker:
+                os.environ["AUTOPATCH_DOCKER_EVAL"] = "1"
+            try:
+                from autopatch import run_agent_on_issue
+                agent_result = run_agent_on_issue(
+                    issue_text=self.instance.problem_statement,
+                    working_dir=workspace_str,
+                    repo_language="Python",
+                )
+            finally:
+                os.environ.pop("AUTOPATCH_DOCKER_EVAL", None)
             result.review_result = agent_result.get("review_result", "")
             result.step_count = agent_result.get("step_count", 0)
 

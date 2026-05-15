@@ -17,6 +17,7 @@ tools/execute_tools.py
   - verify_importable : 验证 Python 文件是否可正常 import（检测循环依赖和语法错误）
 """
 
+import os
 import shlex
 import subprocess
 import sys
@@ -379,6 +380,11 @@ def verify_importable(file_path: str) -> str:
         失败时返回包含完整错误信息的字符串。
     """
     logger.debug(f"  [Tool: verify_importable] 验证文件: {file_path}")
+    # Docker 评测模式下本地 Python 环境缺少项目依赖（如 astroid/pytest 等），
+    # 强制 import 会误报失败，误导 Coder 无限重试。以 TestRunner 实际结果为准。
+    if os.getenv("AUTOPATCH_DOCKER_EVAL"):
+        logger.info(f"  [Tool: verify_importable] Docker 模式，跳过本地导入验证: {file_path}")
+        return "[跳过] Docker 评测模式下不做本地导入验证，以 TestRunner 的实际测试结果为准。"
     try:
         path = resolve_workspace_path(file_path)
 

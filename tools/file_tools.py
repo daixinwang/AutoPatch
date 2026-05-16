@@ -39,37 +39,37 @@ def _is_test_file(file_path: str) -> bool:
 @tool
 def read_file(file_path: str) -> str:
     """
-    读取指定路径文件的内容并以字符串形式返回。
+    Read the contents of a file at the given path and return it as a string.
 
     Args:
-        file_path: 要读取的文件路径（支持相对路径和绝对路径）。
+        file_path: Path to the file (relative or absolute).
 
     Returns:
-        文件内容字符串；若文件不存在或读取失败，返回描述错误的字符串。
+        File contents as a string; if the file does not exist or cannot be read, returns an error description.
     """
-    logger.debug(f"  [Tool: read_file] 尝试读取文件: {file_path}")
+    logger.debug(f"  [Tool: read_file] reading file: {file_path}")
     try:
         path = resolve_workspace_path(file_path)
         if not path.exists():
-            error_msg = f"[错误] 文件不存在: {file_path}"
+            error_msg = f"[ERROR] File not found: {file_path}"
             logger.debug(f"  [Tool: read_file] {error_msg}")
             return error_msg
 
         if not path.is_file():
-            error_msg = f"[错误] 路径存在但不是一个文件: {file_path}"
+            error_msg = f"[ERROR] Path exists but is not a file: {file_path}"
             logger.debug(f"  [Tool: read_file] {error_msg}")
             return error_msg
 
         content = path.read_text(encoding="utf-8")
-        logger.debug(f"  [Tool: read_file] 成功读取，内容长度: {len(content)} 字符")
+        logger.debug(f"  [Tool: read_file] read successfully, length: {len(content)} chars")
         return content
 
     except PermissionError:
-        error_msg = f"[错误] 没有权限读取文件: {file_path}"
+        error_msg = f"[ERROR] Permission denied reading file: {file_path}"
         logger.error(f"  [Tool: read_file] {error_msg}")
         return error_msg
     except Exception as e:
-        error_msg = f"[错误] 读取文件时发生未知错误: {type(e).__name__}: {e}"
+        error_msg = f"[ERROR] Unknown error reading file: {type(e).__name__}: {e}"
         logger.error(f"  [Tool: read_file] {error_msg}")
         return error_msg
 
@@ -80,49 +80,47 @@ def read_file(file_path: str) -> str:
 @tool
 def write_and_replace_file(file_path: str, content: str) -> str:
     """
-    将 content 写入指定路径的文件。若文件已存在则覆盖，若不存在则创建（包括中间目录）。
+    Write content to a file. Overwrites if the file exists; creates it (including parent directories) if it does not.
 
     Args:
-        file_path: 目标文件路径（支持相对路径和绝对路径）。
-        content:   要写入的完整文件内容字符串。
+        file_path: Target file path (relative or absolute).
+        content:   Complete file content to write.
 
     Returns:
-        写入成功的确认信息；若写入失败，返回描述错误的字符串。
+        Confirmation message on success; error description on failure.
     """
-    logger.debug(f"  [Tool: write_and_replace_file] 尝试写入文件: {file_path}")
+    logger.debug(f"  [Tool: write_and_replace_file] writing file: {file_path}")
 
     if _is_test_file(file_path):
         msg = (
-            f"[拒绝] 不允许修改测试文件: {file_path}。\n"
-            "你不能创建或修改任何测试文件。请调整你的源码修改方案，使其能通过现有测试。\n"
-            "如果现有测试依赖旧的行为模式，请确保你的修复兼容该模式，或在源码中同时处理两种情况。"
+            f"[REJECTED] Modifying test files is not allowed: {file_path}.\n"
+            "You must not create or modify any test files. Adjust your source code fix to pass the existing tests.\n"
+            "If the existing tests depend on old behavior, ensure your fix is compatible with that behavior, or handle both cases in the source."
         )
-        logger.warning(f"  [Tool: write_and_replace_file] 拒绝写入测试文件")
+        logger.warning(f"  [Tool: write_and_replace_file] rejected write to test file")
         return msg
 
     try:
         path = resolve_workspace_path(file_path)
 
-        # 自动创建不存在的父目录
         path.parent.mkdir(parents=True, exist_ok=True)
 
         path.write_text(content, encoding="utf-8")
 
-        # 写入后校验
         written_size = path.stat().st_size
-        logger.info(f"  [Tool: write_and_replace_file] 写入成功，文件大小: {written_size} bytes")
-        return f"[成功] 文件已写入: {file_path}（{written_size} bytes）"
+        logger.info(f"  [Tool: write_and_replace_file] write successful, size: {written_size} bytes")
+        return f"[OK] File written: {file_path} ({written_size} bytes)"
 
     except PermissionError:
-        error_msg = f"[错误] 没有权限写入文件: {file_path}"
+        error_msg = f"[ERROR] Permission denied writing file: {file_path}"
         logger.error(f"  [Tool: write_and_replace_file] {error_msg}")
         return error_msg
     except OSError as e:
-        error_msg = f"[错误] 文件系统错误: {type(e).__name__}: {e}"
+        error_msg = f"[ERROR] Filesystem error: {type(e).__name__}: {e}"
         logger.error(f"  [Tool: write_and_replace_file] {error_msg}")
         return error_msg
     except Exception as e:
-        error_msg = f"[错误] 写入文件时发生未知错误: {type(e).__name__}: {e}"
+        error_msg = f"[ERROR] Unknown error writing file: {type(e).__name__}: {e}"
         logger.error(f"  [Tool: write_and_replace_file] {error_msg}")
         return error_msg
 
@@ -133,84 +131,83 @@ def write_and_replace_file(file_path: str, content: str) -> str:
 @tool
 def edit_file(file_path: str, old_string: str, new_string: str) -> str:
     """
-    对已有文件进行精确的局部文本替换。old_string 必须在文件中唯一匹配。
+    Perform a precise in-place text replacement in an existing file. old_string must match exactly once.
 
-    这是修改现有文件的首选工具——只需提供要替换的原始片段和新片段，
-    无需输出整个文件内容，适用于任意大小的文件。
+    This is the preferred tool for modifying existing files — provide only the original snippet and the replacement;
+    no need to output the entire file. Works for files of any size.
 
-    注意：如果 old_string 在文件中出现多次，本工具会拒绝执行并报错。
-    此时请在 old_string 中包含更多上下文（如前后几行代码）使其唯一匹配。
+    Note: If old_string appears more than once, the tool will refuse and return an error.
+    In that case, include more surrounding context (e.g. adjacent lines) to make it unique.
 
     Args:
-        file_path:   要编辑的文件路径（支持相对路径和绝对路径）。
-        old_string:  文件中要被替换的原始文本（必须唯一匹配，包括缩进和空白）。
-        new_string:  用于替换的新文本。
+        file_path:   Path to the file to edit (relative or absolute).
+        old_string:  The original text to replace (must match exactly once, including indentation and whitespace).
+        new_string:  The replacement text.
 
     Returns:
-        编辑成功的确认信息；若失败，返回描述错误的字符串。
+        Confirmation message on success; error description on failure.
     """
-    logger.debug(f"  [Tool: edit_file] 编辑文件: {file_path}")
+    logger.debug(f"  [Tool: edit_file] editing file: {file_path}")
 
     if _is_test_file(file_path):
         msg = (
-            f"[拒绝] 不允许修改测试文件: {file_path}。\n"
-            "你不能修改任何测试文件。请调整你的源码修改方案，使其能通过现有测试。\n"
-            "如果现有测试依赖旧的行为模式，请确保你的修复兼容该模式，或在源码中同时处理两种情况。"
+            f"[REJECTED] Modifying test files is not allowed: {file_path}.\n"
+            "You must not modify any test files. Adjust your source code fix to pass the existing tests.\n"
+            "If the existing tests depend on old behavior, ensure your fix is compatible with that behavior, or handle both cases in the source."
         )
-        logger.warning(f"  [Tool: edit_file] 拒绝编辑测试文件")
+        logger.warning(f"  [Tool: edit_file] rejected edit of test file")
         return msg
 
     try:
         path = resolve_workspace_path(file_path)
 
         if not path.exists():
-            error_msg = f"[错误] 文件不存在: {file_path}"
+            error_msg = f"[ERROR] File not found: {file_path}"
             logger.debug(f"  [Tool: edit_file] {error_msg}")
             return error_msg
 
         if not path.is_file():
-            error_msg = f"[错误] 路径不是文件: {file_path}"
+            error_msg = f"[ERROR] Path is not a file: {file_path}"
             logger.debug(f"  [Tool: edit_file] {error_msg}")
             return error_msg
 
         content = path.read_text(encoding="utf-8")
 
         if old_string == new_string:
-            return "[提示] old_string 和 new_string 相同，未做修改。"
+            return "[NOTE] old_string and new_string are identical; no change made."
 
         if old_string not in content:
-            # 提供上下文帮助 LLM 调试
             preview = content[:500] + "..." if len(content) > 500 else content
             error_msg = (
-                f"[错误] 在文件 {file_path} 中未找到要替换的文本。\n"
-                f"请确保 old_string 与文件内容完全匹配（包括缩进、空行和空白字符）。\n"
-                f"文件前 500 字符预览:\n{preview}"
+                f"[ERROR] Text to replace not found in {file_path}.\n"
+                f"Make sure old_string exactly matches the file content (including indentation, blank lines, and whitespace).\n"
+                f"First 500 chars of file:\n{preview}"
             )
-            logger.debug(f"  [Tool: edit_file] old_string 未匹配")
+            logger.debug(f"  [Tool: edit_file] old_string not matched")
             return error_msg
 
         count = content.count(old_string)
         if count > 1:
             error_msg = (
-                f"[错误] old_string 在文件中出现了 {count} 次，无法确定替换哪一处，本次编辑未执行。\n"
-                f"请在 old_string 中包含更多上下文（如前后几行代码），使其在文件中唯一匹配。\n"
-                f"如需修改多处，请对每一处分别调用 edit_file，每次提供足够的上下文来唯一定位。"
+                f"[ERROR] old_string appears {count} times in the file; cannot determine which occurrence to replace. Edit aborted.\n"
+                f"Include more surrounding context (e.g. adjacent lines) in old_string to make it unique.\n"
+                f"To edit multiple locations, call edit_file separately for each with enough context to uniquely identify it."
             )
-            logger.debug(f"  [Tool: edit_file] old_string 出现 {count} 次，拒绝执行")
+            logger.debug(f"  [Tool: edit_file] old_string appears {count} times, refusing")
             return error_msg
 
         new_content = content.replace(old_string, new_string, 1)
         path.write_text(new_content, encoding="utf-8")
 
         written_size = path.stat().st_size
-        logger.info(f"  [Tool: edit_file] 编辑成功，文件大小: {written_size} bytes")
-        return f"[成功] 文件已编辑: {file_path}（{written_size} bytes）"
+        logger.info(f"  [Tool: edit_file] edit successful, size: {written_size} bytes")
+        return f"[OK] File edited: {file_path} ({written_size} bytes)"
 
     except PermissionError:
-        error_msg = f"[错误] 没有权限编辑文件: {file_path}"
+        error_msg = f"[ERROR] Permission denied editing file: {file_path}"
         logger.error(f"  [Tool: edit_file] {error_msg}")
         return error_msg
     except Exception as e:
-        error_msg = f"[错误] 编辑文件时发生未知错误: {type(e).__name__}: {e}"
+        error_msg = f"[ERROR] Unknown error editing file: {type(e).__name__}: {e}"
         logger.error(f"  [Tool: edit_file] {error_msg}")
         return error_msg

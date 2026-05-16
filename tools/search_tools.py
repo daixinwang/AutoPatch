@@ -64,24 +64,24 @@ def list_directory(
     max_depth: int = 3,
 ) -> str:
     """
-    递归列出指定目录的树状结构，帮助 Agent 快速了解项目布局。
+    Recursively list a directory tree to help the agent quickly understand the project layout.
 
-    自动跳过 .git、.venv、__pycache__ 等无关目录。
+    Automatically skips .git, .venv, __pycache__, and other irrelevant directories.
 
     Args:
-        directory_path: 要列出的目录路径（默认为当前目录 "."）。
-        max_depth:       最大递归深度，范围 1-5（默认 3）。
+        directory_path: Directory to list (default ".").
+        max_depth:       Maximum recursion depth, 1-5 (default 3).
 
     Returns:
-        树状目录结构字符串；出错时返回错误描述。
+        Tree-structured directory string; error description on failure.
     """
-    logger.debug(f"  [Tool: list_directory] 列出目录: {directory_path}（深度={max_depth}）")
+    logger.debug(f"  [Tool: list_directory] listing: {directory_path} (depth={max_depth})")
     try:
         root = resolve_workspace_path(directory_path).resolve()
         if not root.exists():
-            return f"[错误] 目录不存在: {directory_path}"
+            return f"[ERROR] Directory not found: {directory_path}"
         if not root.is_dir():
-            return f"[错误] 路径不是目录: {directory_path}"
+            return f"[ERROR] Path is not a directory: {directory_path}"
 
         max_depth = max(1, min(max_depth, MAX_TREE_DEPTH))
         lines: list[str] = [f"{root}/"]
@@ -93,20 +93,19 @@ def list_directory(
                 return
 
             try:
-                # 排序：目录在前，文件在后，字母排序
                 entries = sorted(
                     path.iterdir(),
                     key=lambda p: (not p.is_dir(), p.name.lower()),
                 )
             except PermissionError:
-                lines.append(f"{prefix}└── [权限拒绝]")
+                lines.append(f"{prefix}└── [permission denied]")
                 return
 
             for i, entry in enumerate(entries):
                 if _should_ignore(entry):
                     continue
                 if entry_count >= MAX_TREE_ENTRIES:
-                    lines.append(f"{prefix}└── ... (条目过多，已截断)")
+                    lines.append(f"{prefix}└── ... (too many entries, truncated)")
                     break
 
                 is_last = i == len(entries) - 1
@@ -121,11 +120,11 @@ def list_directory(
 
         _walk(root, 1, "")
         result = "\n".join(lines)
-        logger.debug(f"  [Tool: list_directory] 完成，共 {entry_count} 条目")
+        logger.debug(f"  [Tool: list_directory] done, {entry_count} entries")
         return result
 
     except Exception as e:
-        error_msg = f"[错误] list_directory 执行失败: {type(e).__name__}: {e}"
+        error_msg = f"[ERROR] list_directory failed: {type(e).__name__}: {e}"
         logger.error(f"  [Tool: list_directory] {error_msg}")
         return error_msg
 
@@ -141,34 +140,33 @@ def search_codebase(
     case_sensitive: bool = False,
 ) -> str:
     """
-    在指定目录下递归搜索匹配正则表达式的代码行（类似 grep -rn）。
+    Recursively search for lines matching a regex pattern across a directory (like grep -rn).
 
-    适合场景：
-      - 查找某个函数/变量在哪些文件里被调用
-      - 定位错误字符串或特定 import
-      - 搜索 TODO / FIXME 注释
+    Useful for:
+      - Finding where a function or variable is called
+      - Locating a specific import or error string
+      - Searching for TODO / FIXME comments
 
     Args:
-        pattern:        正则表达式或普通字符串，例如 "def calculate" 或 "import os"。
-        directory_path: 搜索根目录（默认 "."）。
-        file_extension: 只搜索该后缀的文件（默认 ".py"，传 "" 表示搜索所有文件）。
-        case_sensitive: 是否区分大小写（默认 False，不区分）。
+        pattern:        Regex or plain string, e.g. "def calculate" or "import os".
+        directory_path: Root directory to search (default ".").
+        file_extension: Only search files with this extension (default ".py"; pass "" for all files).
+        case_sensitive: Whether the search is case-sensitive (default False).
 
     Returns:
-        匹配结果字符串，格式为 "文件路径:行号: 代码行内容"；
-        未找到返回提示；出错返回错误描述。
+        Matches as "file:lineno: line content"; no-results message if nothing found; error description on failure.
     """
-    logger.debug(f"  [Tool: search_codebase] 搜索 '{pattern}' in '{directory_path}' (*{file_extension})")
+    logger.debug(f"  [Tool: search_codebase] searching '{pattern}' in '{directory_path}' (*{file_extension})")
     try:
         root = resolve_workspace_path(directory_path).resolve()
         if not root.exists():
-            return f"[错误] 目录不存在: {directory_path}"
+            return f"[ERROR] Directory not found: {directory_path}"
 
         flags = 0 if case_sensitive else re.IGNORECASE
         try:
             compiled_pattern = re.compile(pattern, flags)
         except re.error as e:
-            return f"[错误] 无效的正则表达式 '{pattern}': {e}"
+            return f"[ERROR] Invalid regex '{pattern}': {e}"
 
         matches: list[str] = []
 
@@ -178,7 +176,7 @@ def search_codebase(
             if _should_ignore(filepath.relative_to(root)):
                 continue
             if len(matches) >= MAX_SEARCH_RESULTS:
-                matches.append(f"... (结果超过 {MAX_SEARCH_RESULTS} 条，已截断，请缩小搜索范围)")
+                matches.append(f"... (over {MAX_SEARCH_RESULTS} results, truncated — narrow your search)")
                 break
 
             try:
@@ -194,14 +192,14 @@ def search_codebase(
                         break
 
         if not matches:
-            return f"[无结果] 在 '{directory_path}' 中未找到匹配 '{pattern}' 的 {file_extension} 文件内容"
+            return f"[NO RESULTS] No {file_extension} content matching '{pattern}' found in '{directory_path}'"
 
         result = "\n".join(matches)
-        logger.debug(f"  [Tool: search_codebase] 找到 {len(matches)} 条匹配")
+        logger.debug(f"  [Tool: search_codebase] found {len(matches)} matches")
         return result
 
     except Exception as e:
-        error_msg = f"[错误] search_codebase 执行失败: {type(e).__name__}: {e}"
+        error_msg = f"[ERROR] search_codebase failed: {type(e).__name__}: {e}"
         logger.error(f"  [Tool: search_codebase] {error_msg}")
         return error_msg
 
@@ -215,30 +213,29 @@ def find_definition(
     directory_path: str = ".",
 ) -> str:
     """
-    使用 Python AST（抽象语法树）在代码库中精准定位函数或类的定义位置。
+    Use Python AST to precisely locate function or class definitions in the codebase.
 
-    与 search_codebase 的区别：
-      - search_codebase 是文本搜索，会包含注释、字符串中的误匹配
-      - find_definition 解析 AST，只返回真正的函数/类定义，精确且无噪声
+    Unlike search_codebase:
+      - search_codebase does text search, which may include false matches in comments or strings
+      - find_definition parses the AST, returning only real function/class definitions — precise and noise-free
 
-    适合场景：
-      - 确认某函数是否存在及其所在文件
-      - 找到类定义位置后再用 read_file 读取完整实现
-      - 查看函数参数签名
+    Useful for:
+      - Confirming whether a function exists and which file it is in
+      - Locating a class definition before reading the full implementation with read_file
+      - Viewing a function's parameter signature
 
     Args:
-        symbol_name:    要查找的函数名或类名（精确匹配，不支持正则）。
-        directory_path: 搜索根目录（默认 "."）。
+        symbol_name:    Exact function or class name to find (no regex).
+        directory_path: Root directory to search (default ".").
 
     Returns:
-        所有匹配的定义位置，格式为 "文件路径:行号: def/class 签名"；
-        未找到时返回提示；出错返回错误描述。
+        All matching definitions as "file:lineno: def/class signature"; no-results message if not found; error description on failure.
     """
-    logger.debug(f"  [Tool: find_definition] 查找符号 '{symbol_name}' in '{directory_path}'")
+    logger.debug(f"  [Tool: find_definition] searching symbol '{symbol_name}' in '{directory_path}'")
     try:
         root = resolve_workspace_path(directory_path).resolve()
         if not root.exists():
-            return f"[错误] 目录不存在: {directory_path}"
+            return f"[ERROR] Directory not found: {directory_path}"
 
         results: list[str] = []
 
@@ -252,17 +249,14 @@ def find_definition(
                 source = filepath.read_text(encoding="utf-8", errors="ignore")
                 tree = ast.parse(source, filename=str(filepath))
             except SyntaxError:
-                # 跳过语法错误文件，不中断整体检索
                 continue
             except Exception:
                 continue
 
             for node in ast.walk(tree):
-                # 匹配函数定义（普通函数 & 异步函数）和类定义
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                     if node.name == symbol_name:
                         rel_path = filepath.relative_to(root)
-                        # 提取参数签名（仅函数）
                         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                             args = [arg.arg for arg in node.args.args]
                             kind = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
@@ -274,14 +268,14 @@ def find_definition(
                         results.append(f"{rel_path}:{node.lineno}: {signature}")
 
         if not results:
-            return f"[无结果] 未找到符号 '{symbol_name}' 的定义（已搜索 {directory_path} 下所有 .py 文件）"
+            return f"[NO RESULTS] Symbol '{symbol_name}' not found (searched all .py files under {directory_path})"
 
         result = "\n".join(results)
-        logger.debug(f"  [Tool: find_definition] 找到 {len(results)} 处定义")
+        logger.debug(f"  [Tool: find_definition] found {len(results)} definitions")
         return result
 
     except Exception as e:
-        error_msg = f"[错误] find_definition 执行失败: {type(e).__name__}: {e}"
+        error_msg = f"[ERROR] find_definition failed: {type(e).__name__}: {e}"
         logger.error(f"  [Tool: find_definition] {error_msg}")
         return error_msg
 
@@ -296,70 +290,68 @@ def grep_in_file(
     context_lines: int = 3,
 ) -> str:
     """
-    在单个文件内搜索匹配行，并返回每个匹配的上下文代码（前后 N 行）。
+    Search for matching lines within a single file and return each match with surrounding context (N lines before/after).
 
-    适合场景：
-      - 已知 Bug 所在文件，需要精确定位有问题的代码段
-      - 查看某变量赋值或函数调用的完整上下文
+    Useful for:
+      - Precisely locating a problematic code segment when the file is already known
+      - Viewing the full context of a variable assignment or function call
 
     Args:
-        file_path:     要搜索的文件路径。
-        pattern:       正则表达式或普通字符串。
-        context_lines: 每个匹配项显示的上下文行数（默认 3，最大 10）。
+        file_path:     Path to the file to search.
+        pattern:       Regex or plain string.
+        context_lines: Lines of context to show around each match (default 3, max 10).
 
     Returns:
-        带行号和上下文的匹配结果；未找到返回提示；出错返回错误描述。
+        Matches with line numbers and context; no-results message if nothing found; error description on failure.
     """
-    logger.debug(f"  [Tool: grep_in_file] 在 '{file_path}' 中搜索 '{pattern}'")
+    logger.debug(f"  [Tool: grep_in_file] searching '{pattern}' in '{file_path}'")
     try:
         path = resolve_workspace_path(file_path)
         if not path.exists():
-            return f"[错误] 文件不存在: {file_path}"
+            return f"[ERROR] File not found: {file_path}"
         if not path.is_file():
-            return f"[错误] 路径不是文件: {file_path}"
+            return f"[ERROR] Path is not a file: {file_path}"
 
         context_lines = max(0, min(context_lines, 10))
 
         try:
             compiled_pattern = re.compile(pattern, re.IGNORECASE)
         except re.error as e:
-            return f"[错误] 无效的正则表达式 '{pattern}': {e}"
+            return f"[ERROR] Invalid regex '{pattern}': {e}"
 
         lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
         total_lines = len(lines)
 
-        # 收集所有匹配行的行号（1-indexed）
         match_linenos = [
             i + 1 for i, line in enumerate(lines)
             if compiled_pattern.search(line)
         ]
 
         if not match_linenos:
-            return f"[无结果] 文件 '{file_path}' 中未找到匹配 '{pattern}' 的内容"
+            return f"[NO RESULTS] No content matching '{pattern}' found in '{file_path}'"
 
-        # 合并重叠的上下文窗口，避免重复输出
         segments: list[tuple[int, int]] = []
         for lineno in match_linenos:
             start = max(1, lineno - context_lines)
             end = min(total_lines, lineno + context_lines)
             if segments and start <= segments[-1][1] + 1:
-                segments[-1] = (segments[-1][0], end)  # 合并
+                segments[-1] = (segments[-1][0], end)
             else:
                 segments.append((start, end))
 
         output_parts: list[str] = []
         for seg_start, seg_end in segments:
-            output_parts.append(f"--- 行 {seg_start}-{seg_end} ---")
+            output_parts.append(f"--- lines {seg_start}-{seg_end} ---")
             for i in range(seg_start - 1, seg_end):
                 lineno = i + 1
                 marker = ">>>" if lineno in match_linenos else "   "
                 output_parts.append(f"{marker} {lineno:4d} | {lines[i]}")
 
         result = "\n".join(output_parts)
-        logger.debug(f"  [Tool: grep_in_file] 找到 {len(match_linenos)} 处匹配，{len(segments)} 个代码段")
+        logger.debug(f"  [Tool: grep_in_file] found {len(match_linenos)} matches in {len(segments)} segments")
         return result
 
     except Exception as e:
-        error_msg = f"[错误] grep_in_file 执行失败: {type(e).__name__}: {e}"
+        error_msg = f"[ERROR] grep_in_file failed: {type(e).__name__}: {e}"
         logger.error(f"  [Tool: grep_in_file] {error_msg}")
         return error_msg

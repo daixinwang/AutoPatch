@@ -83,7 +83,7 @@ def _truncate_output(text: str, max_bytes: int = MAX_OUTPUT_BYTES) -> str:
     head = encoded[:half].decode("utf-8", errors="replace")
     tail = encoded[-half:].decode("utf-8", errors="replace")
     omitted = len(encoded) - max_bytes
-    return f"{head}\n\n... [输出过长，中间 {omitted} 字节已省略] ...\n\n{tail}"
+    return f"{head}\n\n... [output too long, {omitted} bytes omitted from middle] ...\n\n{tail}"
 
 
 def _run_subprocess(
@@ -146,14 +146,14 @@ def _format_result(
         格式化的报告字符串
     """
     lines: list[str] = []
-    lines.append(f"命令: {cmd_display}")
-    lines.append(f"工作目录: {cwd}")
+    lines.append(f"Command: {cmd_display}")
+    lines.append(f"Working dir: {cwd}")
 
     if result["timed_out"]:
-        lines.append(f"状态: ⏰ 超时（命令执行时间过长）")
+        lines.append("Status: ⏰ TIMEOUT (command took too long)")
     else:
-        status = "✅ 成功 (exit 0)" if result["returncode"] == 0 else f"❌ 失败 (exit {result['returncode']})"
-        lines.append(f"状态: {status}")
+        status = "✅ SUCCESS (exit 0)" if result["returncode"] == 0 else f"❌ FAILED (exit {result['returncode']})"
+        lines.append(f"Status: {status}")
 
     if result["stdout"].strip():
         lines.append("\n--- stdout ---")
@@ -164,7 +164,7 @@ def _format_result(
         lines.append(_truncate_output(result["stderr"]))
 
     if not result["stdout"].strip() and not result["stderr"].strip():
-        lines.append("（无任何输出）")
+        lines.append("(no output)")
 
     return "\n".join(lines)
 
@@ -180,30 +180,29 @@ def run_pytest(
     timeout_seconds: int = 60,
 ) -> str:
     """
-    对指定路径运行 pytest 测试套件，返回完整的测试报告（含通过/失败/错误详情）。
+    Run pytest on the given path and return the full test report (including pass/fail/error details).
 
-    适合场景：
-      - 验证 Coder 修改的代码是否通过单元测试
-      - 检查是否引入了回归 Bug
-      - 查看具体的 AssertionError 和 traceback
+    Useful for:
+      - Verifying that the Coder's changes pass unit tests
+      - Checking for regressions
+      - Viewing specific AssertionErrors and tracebacks
 
     Args:
-        test_path:          pytest 的测试目标，可以是目录、文件或 "模块::函数"
-                            （默认 "." 表示自动发现当前目录下所有测试）。
-        extra_args:         附加的 pytest 参数字符串，如 "-v --tb=short -x"
-                            （-x 表示遇到第一个失败即停止）。
-        working_directory:  执行 pytest 的工作目录（默认 "."）。
-        timeout_seconds:    超时秒数，最大 {MAX_TIMEOUT_SECONDS} 秒（默认 60）。
+        test_path:          pytest target: directory, file, or "module::function"
+                            (default "." auto-discovers all tests in the current directory).
+        extra_args:         Additional pytest flags, e.g. "-v --tb=short -x"
+                            (-x stops on first failure).
+        working_directory:  Working directory for pytest (default ".").
+        timeout_seconds:    Timeout in seconds, max {MAX_TIMEOUT_SECONDS} (default 60).
 
     Returns:
-        pytest 的完整输出报告（包含 stdout + stderr）；出错时返回错误描述。
+        Full pytest output report (stdout + stderr); error description on failure.
     """
-    logger.debug(f"  [Tool: run_pytest] 运行 pytest {test_path} {extra_args}")
+    logger.debug(f"  [Tool: run_pytest] running pytest {test_path} {extra_args}")
     try:
         cwd = str(resolve_workspace_path(working_directory))
         timeout = max(1, min(timeout_seconds, MAX_TIMEOUT_SECONDS))
 
-        # 构建命令：使用当前 venv 的 python -m pytest，确保包路径正确
         cmd_args = [sys.executable, "-m", "pytest", test_path]
         if extra_args.strip():
             cmd_args.extend(shlex.split(extra_args))
@@ -212,11 +211,11 @@ def run_pytest(
         report = _format_result(" ".join(cmd_args), result, cwd)
 
         status_emoji = "✅" if result["returncode"] == 0 else "❌"
-        logger.debug(f"  [Tool: run_pytest] {status_emoji} 完成，exit code: {result['returncode']}")
+        logger.debug(f"  [Tool: run_pytest] {status_emoji} done, exit code: {result['returncode']}")
         return report
 
     except Exception as e:
-        error_msg = f"[错误] run_pytest 执行失败: {type(e).__name__}: {e}"
+        error_msg = f"[ERROR] run_pytest failed: {type(e).__name__}: {e}"
         logger.error(f"  [Tool: run_pytest] {error_msg}")
         return error_msg
 
@@ -232,37 +231,36 @@ def run_python_script(
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
 ) -> str:
     """
-    运行单个 Python 脚本文件，捕获并返回 stdout 和 stderr。
+    Run a single Python script file and capture stdout and stderr.
 
-    适合场景：
-      - 验证新创建的模块是否可以正常 import 和运行
-      - 运行带有简单断言的冒烟测试脚本
-      - 捕获脚本运行时的错误 traceback
+    Useful for:
+      - Verifying that a newly created module can be imported and run
+      - Running a smoke test script with simple assertions
+      - Capturing runtime error tracebacks
 
-    安全限制：
-      - 只能执行 .py 文件
-      - 超时自动终止（默认 {DEFAULT_TIMEOUT_SECONDS} 秒，最大 {MAX_TIMEOUT_SECONDS} 秒）
-      - 输出超过 {MAX_OUTPUT_BYTES} 字节时自动截断
+    Safety limits:
+      - Only .py files are allowed
+      - Auto-terminates on timeout (default {DEFAULT_TIMEOUT_SECONDS}s, max {MAX_TIMEOUT_SECONDS}s)
+      - Output truncated if it exceeds {MAX_OUTPUT_BYTES} bytes
 
     Args:
-        script_path:        要运行的 Python 脚本路径（.py 文件）。
-        script_args:        传递给脚本的命令行参数字符串（可选）。
-        working_directory:  执行脚本的工作目录（默认 "."）。
-        timeout_seconds:    超时秒数（默认 {DEFAULT_TIMEOUT_SECONDS}，最大 {MAX_TIMEOUT_SECONDS}）。
+        script_path:        Path to the Python script (.py file).
+        script_args:        Command-line arguments to pass to the script (optional).
+        working_directory:  Working directory for the script (default ".").
+        timeout_seconds:    Timeout in seconds (default {DEFAULT_TIMEOUT_SECONDS}, max {MAX_TIMEOUT_SECONDS}).
 
     Returns:
-        脚本运行的完整输出报告（stdout + stderr + exit code）；出错返回错误描述。
+        Full output report (stdout + stderr + exit code); error description on failure.
     """
-    logger.debug(f"  [Tool: run_python_script] 运行脚本: {script_path}")
+    logger.debug(f"  [Tool: run_python_script] running script: {script_path}")
     try:
         script = resolve_workspace_path(script_path)
 
-        # 安全检查：只允许 .py 文件
         if script.suffix.lower() != ".py":
-            return f"[错误] 安全限制：只允许运行 .py 文件，拒绝执行: {script_path}"
+            return f"[ERROR] Safety restriction: only .py files are allowed, refused: {script_path}"
 
         if not script.exists():
-            return f"[错误] 脚本文件不存在: {script_path}"
+            return f"[ERROR] Script file not found: {script_path}"
 
         cwd = str(resolve_workspace_path(working_directory))
         timeout = max(1, min(timeout_seconds, MAX_TIMEOUT_SECONDS))
@@ -275,11 +273,11 @@ def run_python_script(
         report = _format_result(" ".join(cmd_args), result, cwd)
 
         status_emoji = "✅" if result["returncode"] == 0 else "❌"
-        logger.debug(f"  [Tool: run_python_script] {status_emoji} 完成，exit code: {result['returncode']}")
+        logger.debug(f"  [Tool: run_python_script] {status_emoji} done, exit code: {result['returncode']}")
         return report
 
     except Exception as e:
-        error_msg = f"[错误] run_python_script 执行失败: {type(e).__name__}: {e}"
+        error_msg = f"[ERROR] run_python_script failed: {type(e).__name__}: {e}"
         logger.error(f"  [Tool: run_python_script] {error_msg}")
         return error_msg
 
@@ -316,11 +314,11 @@ def run_test_command(
     timeout_seconds: int = 120,
 ) -> str:
     """
-    对非 Python 项目运行语言原生测试命令（npm test / cargo test / go test 等）。
+    Run a language-native test command for non-Python projects (npm test / cargo test / go test, etc.).
 
-    仅允许执行预定义白名单中的命令，拒绝任意 shell 命令以防注入。
+    Only commands from a predefined whitelist are allowed; arbitrary shell commands are rejected to prevent injection.
 
-    支持的命令（完整列表）：
+    Supported commands (full list):
       npm test, npm run test, yarn test, pnpm test
       cargo test
       go test ./..., go test .
@@ -328,22 +326,22 @@ def run_test_command(
       make test
 
     Args:
-        command:           要执行的测试命令（必须完整匹配白名单中的某一项）。
-        working_directory: 执行命令的工作目录（默认 "." 即仓库根目录）。
-        timeout_seconds:   超时秒数（默认 120，最大 {MAX_TIMEOUT_SECONDS} 秒）。
+        command:           Test command to run (must exactly match one of the whitelist entries).
+        working_directory: Working directory (default "." = repository root).
+        timeout_seconds:   Timeout in seconds (default 120, max {MAX_TIMEOUT_SECONDS}).
 
     Returns:
-        命令的完整输出报告（stdout + stderr + exit code）；出错返回错误描述。
+        Full output report (stdout + stderr + exit code); error description on failure.
     """
-    logger.debug(f"  [Tool: run_test_command] 执行: {command!r}")
+    logger.debug(f"  [Tool: run_test_command] executing: {command!r}")
     try:
         normalized = command.strip().lower()
         cmd_args = _SAFE_TEST_COMMANDS.get(normalized)
         if cmd_args is None:
             allowed = "\n  ".join(_SAFE_TEST_COMMANDS.keys())
             return (
-                f"[错误] 命令不在白名单中: {command!r}\n"
-                f"允许的命令：\n  {allowed}"
+                f"[ERROR] Command not in whitelist: {command!r}\n"
+                f"Allowed commands:\n  {allowed}"
             )
 
         cwd = str(resolve_workspace_path(working_directory))
@@ -353,11 +351,11 @@ def run_test_command(
         report = _format_result(command, result, cwd)
 
         status_emoji = "✅" if result["returncode"] == 0 else "❌"
-        logger.debug(f"  [Tool: run_test_command] {status_emoji} 完成，exit code: {result['returncode']}")
+        logger.debug(f"  [Tool: run_test_command] {status_emoji} done, exit code: {result['returncode']}")
         return report
 
     except Exception as e:
-        error_msg = f"[错误] run_test_command 执行失败: {type(e).__name__}: {e}"
+        error_msg = f"[ERROR] run_test_command failed: {type(e).__name__}: {e}"
         logger.error(f"  [Tool: run_test_command] {error_msg}")
         return error_msg
 
@@ -368,34 +366,29 @@ def run_test_command(
 @tool
 def verify_importable(file_path: str) -> str:
     """
-    验证修改后的 Python 源文件是否可以正常 import（检测语法错误和循环依赖）。
+    Verify that a modified Python source file can be imported cleanly (detects syntax errors and circular imports).
 
-    在修改任何 Python 源文件后调用此工具，确保没有破坏模块的可导入性。
+    Call this after modifying any Python source file to ensure the module's importability is not broken.
 
     Args:
-        file_path: 要验证的 Python 文件路径（相对于工作目录，如 "sympy/printing/ccode.py"）
+        file_path: Path to the Python file to verify (relative to workspace, e.g. "sympy/printing/ccode.py")
 
     Returns:
-        成功时返回 "[成功] 模块可正常导入：<module_name>"；
-        失败时返回包含完整错误信息的字符串。
+        "[OK] Module imports successfully: <module_name>" on success;
+        a string containing the full error on failure.
     """
-    logger.debug(f"  [Tool: verify_importable] 验证文件: {file_path}")
-    # Docker 评测模式下本地 Python 环境缺少项目依赖（如 astroid/pytest 等），
-    # 强制 import 会误报失败，误导 Coder 无限重试。以 TestRunner 实际结果为准。
+    logger.debug(f"  [Tool: verify_importable] verifying file: {file_path}")
     if os.getenv("AUTOPATCH_DOCKER_EVAL"):
-        logger.info(f"  [Tool: verify_importable] Docker 模式，跳过本地导入验证: {file_path}")
-        return "[跳过] Docker 评测模式下不做本地导入验证，以 TestRunner 的实际测试结果为准。"
+        logger.info(f"  [Tool: verify_importable] Docker eval mode, skipping local import check: {file_path}")
+        return "[SKIPPED] Local import verification is disabled in Docker eval mode. Rely on TestRunner results instead."
     try:
         path = resolve_workspace_path(file_path)
 
         if not path.exists():
-            return f"[错误] 文件不存在: {file_path}"
+            return f"[ERROR] File not found: {file_path}"
         if path.suffix.lower() != ".py":
-            return f"[错误] 只支持 .py 文件，收到: {file_path}"
+            return f"[ERROR] Only .py files are supported, got: {file_path}"
 
-        # 将相对路径转换为模块名，自动处理 src/ 布局
-        # 普通布局：sympy/printing/ccode.py → sympy.printing.ccode（从 workspace 根运行）
-        # src 布局：src/flask/config.py → flask.config（从 workspace/src/ 运行）
         workspace = Path(get_workspace())
         if file_path.startswith("src/") and (workspace / "src").exists():
             rel = Path(file_path[4:]).as_posix().removesuffix(".py")
@@ -405,8 +398,6 @@ def verify_importable(file_path: str) -> str:
             cwd = get_workspace()
         module_name = rel.replace("/", ".")
 
-        # 安全说明：命令固定为 [sys.executable, "-c", "import <module>"]，
-        # module_name 由文件路径机械转换而来（不含用户自由输入），无需 _is_safe_command 白名单校验。
         result = _run_subprocess(
             [sys.executable, "-c", f"import {module_name}"],
             cwd=cwd,
@@ -415,21 +406,21 @@ def verify_importable(file_path: str) -> str:
 
         if result["timed_out"]:
             return (
-                f"[超时] import {module_name} 超时（15s），"
-                "可能存在循环导入，请检查模块级 import 语句"
+                f"[TIMEOUT] import {module_name} timed out (15s). "
+                "Possible circular import — check module-level import statements."
             )
 
         if result["returncode"] == 0:
-            logger.info(f"  [Tool: verify_importable] ✅ 可正常导入: {module_name}")
-            return f"[成功] 模块可正常导入：{module_name}"
+            logger.info(f"  [Tool: verify_importable] ✅ import OK: {module_name}")
+            return f"[OK] Module imports successfully: {module_name}"
 
         error_output = _truncate_output(result["stderr"] or result["stdout"])
-        logger.warning(f"  [Tool: verify_importable] ❌ 导入失败: {module_name}")
+        logger.warning(f"  [Tool: verify_importable] ❌ import failed: {module_name}")
         return (
-            f"[失败] import {module_name} 出错，请修复后重试：\n{error_output}"
+            f"[FAILED] import {module_name} errored — fix and retry:\n{error_output}"
         )
 
     except Exception as e:
-        error_msg = f"[错误] verify_importable 执行失败: {type(e).__name__}: {e}"
+        error_msg = f"[ERROR] verify_importable failed: {type(e).__name__}: {e}"
         logger.error(f"  [Tool: verify_importable] {error_msg}")
         return error_msg

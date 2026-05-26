@@ -87,3 +87,29 @@ def resolve_workspace_path(path_str: str) -> Path:
             f"路径安全限制：{path_str!r} 解析后逃逸出工作目录 {workspace_root}"
         )
     return resolved
+
+
+# ── RAG 检索器 ContextVar（与 workspace 同生命周期）─────────────
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from src.rag.retriever import CodeRetriever
+
+_retriever: ContextVar[Optional["CodeRetriever"]] = ContextVar(
+    "_retriever", default=None
+)
+
+
+def set_retriever(retriever: "CodeRetriever") -> Token:
+    """在当前异步上下文中注册 CodeRetriever 实例，返回 Token 供还原。"""
+    return _retriever.set(retriever)
+
+
+def reset_retriever(token: Token) -> None:
+    """还原 _retriever 到 set_retriever() 调用前的值。"""
+    _retriever.reset(token)
+
+
+def get_retriever() -> Optional["CodeRetriever"]:
+    """获取当前上下文绑定的 CodeRetriever，未设置返回 None。"""
+    return _retriever.get()

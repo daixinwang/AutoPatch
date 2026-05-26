@@ -43,6 +43,18 @@ MAX_MESSAGE_CHARS: int = int(os.getenv("MAX_MESSAGE_CHARS", "100000"))
 # Reviewer 内部循环允许的工具调用总数（防止失控）。
 MAX_REVIEWER_TOOL_CALLS: int = int(os.getenv("MAX_REVIEWER_TOOL_CALLS", "8"))
 
+# ── 代码 RAG 配置 ──────────────────────────────────────────
+# Embedding 模型（OpenAI text-embedding-3-small）
+RAG_EMBEDDING_MODEL: str = os.getenv("RAG_EMBEDDING_MODEL", "text-embedding-3-small")
+# RAG 索引缓存根目录
+RAG_CACHE_DIR: str = os.getenv("RAG_CACHE_DIR", ".autopatch_cache")
+# OpenAI Embedding 专属 API Key（与 Anthropic 代理的 OPENAI_API_KEY 分开）
+OPENAI_EMBED_API_KEY: str = os.getenv("OPENAI_EMBED_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+# OpenAI Embedding API Base URL（默认为官方端点）
+OPENAI_EMBED_BASE_URL: str = os.getenv("OPENAI_EMBED_BASE_URL", "")
+# P1: Cross-Encoder Rerank（默认关闭，通过环境变量启用）
+AUTOPATCH_RAG_RERANK: bool = os.getenv("AUTOPATCH_RAG_RERANK", "false").lower() == "true"
+
 
 def validate_required_env() -> None:
     """校验必需的环境变量，缺失时抛出明确错误。"""

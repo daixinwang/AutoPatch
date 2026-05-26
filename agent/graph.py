@@ -46,6 +46,15 @@ from tools.search_tools import (
     search_codebase,
 )
 from tools.execute_tools import run_pytest, run_python_script, run_test_command, verify_importable
+
+# RAG 语义检索工具（可选，未安装时降级）
+try:
+    from src.tools.search_codebase_semantic import semantic_search_codebase as _semantic_search
+    _RAG_AVAILABLE = True
+except Exception:
+    _RAG_AVAILABLE = False
+    _semantic_search = None
+
 from core.config import (
     MAX_CODER_STEPS,
     MAX_MESSAGE_CHARS,
@@ -113,6 +122,10 @@ TOOLS = [
     # ── Import 验证 ───────────────────────
     verify_importable,  # 验证修改后的模块是否可正常导入
 ]
+
+# ── 语义搜索（RAG，可选）──────────────────────
+if _RAG_AVAILABLE and _semantic_search is not None:
+    TOOLS.append(_semantic_search)
 
 # TestRunner 专属工具：只允许执行代码，不允许写文件
 TEST_RUNNER_TOOLS = [run_pytest, run_python_script, run_test_command]
@@ -384,6 +397,65 @@ def _compress_messages(messages: list) -> list:
 # ══════════════════════════════════════════════
 # 5. Nodes 定义
 # ══════════════════════════════════════════════
+
+def index_builder_node(state: AgentState) -> dict:
+    """
+    RAG 索引构建节点（START 后第一个节点）。
+
+    只处理 Python 仓库。失败时不阻断流水线，仅记录警告。
+    通过 ContextVar 把 CodeRetriever 实例注入后续工具调用。
+    """
+    logger.info("[Node: index_builder_node] 开始构建 RAG 索引...")
+
+    lang = (state.get("repo_language") or "").strip()
+    if lang.lower() != "python":
+        logger.info("[Node: index_builder_node] 非 Python 仓库（%s），跳过", lang)
+        return {}
+
+    if not _RAG_AVAILABLE:
+        logger.warning("[Node: index_builder_node] RAG 模块不可用，跳过")
+        return {}
+
+    try:
+        import openai
+        from pathlib import Path
+        from src.rag.chunker import CodeChunker
+        from src.rag.indexer import CodeIndexer
+        from src.rag.retriever import CodeRetriever
+        from tools.workspace import get_workspace, set_retriever
+        from core.config import RAG_EMBEDDING_MODEL, OPENAI_EMBED_API_KEY, OPENAI_EMBED_BASE_URL
+
+        repo_path = get_workspace()
+
+        chunks = CodeChunker().chunk_directory(Path(repo_path))
+        if not chunks:
+            logger.warning("[Node: index_builder_node] 无 .py 文件，跳过")
+            return {}
+
+        indexer = CodeIndexer(repo_path=repo_path)
+        indexer.build_or_update(chunks)
+
+        openai_client = openai.OpenAI(
+            api_key=OPENAI_EMBED_API_KEY or None,
+            base_url=OPENAI_EMBED_BASE_URL or None,
+        )
+        retriever = CodeRetriever(
+            collection=indexer.get_collection(),
+            chunks=chunks,
+            embedding_model=RAG_EMBEDDING_MODEL,
+            openai_client=openai_client,
+        )
+        set_retriever(retriever)
+        logger.info("[Node: index_builder_node] RAG 就绪：%d 个 chunk", len(chunks))
+
+    except Exception as e:
+        logger.warning(
+            "[Node: index_builder_node] 索引失败，流水线继续（无 RAG）: %s: %s",
+            type(e).__name__, e,
+        )
+
+    return {}
+
 
 def planner_node(state: AgentState) -> dict:
     """
@@ -771,6 +843,7 @@ def build_graph(checkpointer=None):
     graph = StateGraph(AgentState)
 
     # ── 添加节点 ──
+    graph.add_node("index_builder_node", index_builder_node)
     graph.add_node("planner_node", planner_node)
     graph.add_node("coder_node", coder_node)
     graph.add_node("tool_node", ToolNode(tools=TOOLS))        # Coder 全量工具集
@@ -779,7 +852,8 @@ def build_graph(checkpointer=None):
 
     # ── 添加边 ──
     # 入口
-    graph.add_edge(START, "planner_node")
+    graph.add_edge(START, "index_builder_node")
+    graph.add_edge("index_builder_node", "planner_node")
     # Planner → Coder
     graph.add_edge("planner_node", "coder_node")
 
@@ -812,7 +886,7 @@ def build_graph(checkpointer=None):
     logger.info("📦 [Graph] 四阶段 StateGraph 构建完成，正在编译...")
     compiled = graph.compile(checkpointer=checkpointer)
     cp_label = type(checkpointer).__name__ if checkpointer else "无"
-    logger.info(f"✅ [Graph] 编译成功！Checkpointer={cp_label}  流程: START→Planner→Coder⇄Tools→TestRunner→Reviewer→END")
+    logger.info(f"✅ [Graph] 编译成功！Checkpointer={cp_label}  流程: START→IndexBuilder→Planner→Coder⇄Tools→TestRunner→Reviewer→END")
     return compiled
 
 

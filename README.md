@@ -91,6 +91,35 @@ START
 
 ---
 
+## Code RAG (Semantic Search)
+
+AutoPatch includes built-in semantic code retrieval to bridge the vocabulary gap between issue descriptions and source code identifiers (e.g., an issue says "login fails" but the actual function is called `authenticate_user`).
+
+### How It Works
+
+1. **AST chunking** — Python `.py` files in the target repo are parsed by the `ast` module and split into function/class/method/module chunks
+2. **Vector indexing** — Each chunk is embedded with OpenAI `text-embedding-3-small` and stored in ChromaDB (`.autopatch_cache/rag_index/`)
+3. **Hybrid retrieval** — Vector similarity + BM25 keyword search are fused via Reciprocal Rank Fusion (RRF), returning Top-5 results
+4. **Workflow integration** — An `index_builder_node` runs automatically before the Planner; the Coder can call `semantic_search_codebase` as a tool
+
+### Configuration
+
+| Environment Variable | Default | Description |
+|---|---|---|
+| `OPENAI_EMBED_API_KEY` | falls back to `OPENAI_API_KEY` | Dedicated OpenAI API key for embeddings |
+| `OPENAI_EMBED_BASE_URL` | *(official endpoint)* | Custom embedding API base URL |
+| `RAG_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model name |
+| `RAG_CACHE_DIR` | `.autopatch_cache` | Root directory for index cache |
+
+### Notes
+
+- Only **Python repositories** are indexed; other languages are silently skipped
+- The index supports **incremental updates** — unchanged chunks are not re-embedded on subsequent runs
+- If indexing fails for any reason, the pipeline **continues without RAG** (Coder falls back to grep tools)
+- `semantic_search_codebase` coexists with the existing `search_codebase` (grep) tool — use grep for exact identifier lookups, semantic search for concept-based queries
+
+---
+
 ## Quick Start
 
 ### Prerequisites

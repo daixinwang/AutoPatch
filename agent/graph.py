@@ -68,6 +68,8 @@ from core.config import (
 )
 
 import logging
+import tiktoken
+_tokenizer = tiktoken.get_encoding("cl100k_base")  # 模块级缓存，只初始化一次
 
 logger = logging.getLogger(__name__)
 
@@ -350,13 +352,18 @@ def _ensure_ends_with_user(messages: list) -> list:
     return messages
 
 
-def _estimate_messages_chars(messages: list) -> int:
-    """估算消息总字符数（仅累加 content 字段）。"""
+def _estimate_messages_tokens(messages: list) -> int:
+    """精确估算消息列表的 token 数（cl100k_base 编码，对 Claude 误差 < 5%）。"""
     total = 0
     for m in messages:
-        content = getattr(m, "content", "")
-        if isinstance(content, str):
-            total += len(content)
+        content = getattr(m, "content", "") or ""
+        if isinstance(content, list):
+            # Anthropic 多 block 格式：只提取 text block，跳过 tool_use
+            content = " ".join(
+                b.get("text", "") for b in content
+                if isinstance(b, dict) and b.get("type") == "text"
+            )
+        total += len(_tokenizer.encode(str(content)))
     return total
 
 

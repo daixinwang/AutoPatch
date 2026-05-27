@@ -57,7 +57,9 @@ except Exception:
 
 from core.config import (
     MAX_CODER_STEPS,
-    MAX_MESSAGE_CHARS,
+    WARN_TOKEN_LIMIT,
+    COMPRESS_TOKEN_LIMIT,
+    MAX_TOKEN_LIMIT,
     MAX_REVIEW_RETRIES,
     MAX_REVIEWER_TOOL_CALLS,
     PLANNER_MODEL_NAME,
@@ -68,6 +70,8 @@ from core.config import (
 )
 
 import logging
+import tiktoken
+_tokenizer = tiktoken.get_encoding("cl100k_base")  # 模块级缓存，只初始化一次
 
 logger = logging.getLogger(__name__)
 
@@ -350,13 +354,18 @@ def _ensure_ends_with_user(messages: list) -> list:
     return messages
 
 
-def _estimate_messages_chars(messages: list) -> int:
-    """估算消息总字符数（仅累加 content 字段）。"""
+def _estimate_messages_tokens(messages: list) -> int:
+    """精确估算消息列表的 token 数（cl100k_base 编码，对 Claude 误差 < 5%）。"""
     total = 0
     for m in messages:
-        content = getattr(m, "content", "")
-        if isinstance(content, str):
-            total += len(content)
+        content = getattr(m, "content", "") or ""
+        if isinstance(content, list):
+            # Anthropic 多 block 格式：只提取 text block，跳过 tool_use
+            content = " ".join(
+                b.get("text", "") for b in content
+                if isinstance(b, dict) and b.get("type") == "text"
+            )
+        total += len(_tokenizer.encode(str(content)))
     return total
 
 
@@ -392,6 +401,14 @@ def _compress_messages(messages: list) -> list:
         if isinstance(msg, HumanMessage)
         or (hasattr(msg, "name") and getattr(msg, "name", None) in _SUMMARY_MESSAGE_NAMES)
     ]
+
+
+_WRAP_UP_HINT = HumanMessage(content=(
+    "⚠️ 上下文剩余空间有限，请立即完成当前任务：\n"
+    "- 不要做额外的搜索或读取\n"
+    "- 直接输出完成报告\n"
+    "- 如果修改已完成，现在就结束"
+))
 
 
 # ══════════════════════════════════════════════
@@ -475,7 +492,7 @@ def planner_node(state: AgentState) -> dict:
 
     lang = state.get("repo_language", "Unknown") or "Unknown"
     messages = [
-        SystemMessage(content=PLANNER_SYSTEM_PROMPT),
+        SystemMessage(content=PLANNER_SYSTEM_PROMPT, additional_kwargs={"cache_control": {"type": "ephemeral"}}),
         HumanMessage(content=(
             f"目标仓库编程语言：{lang}\n\n"
             f"请根据以下 Issue 制定详细执行计划：\n\n{state['issue_task']}"
@@ -542,7 +559,7 @@ def coder_node(state: AgentState) -> dict:
         compressed = _compress_messages(state["messages"])
         rejection_reason = review_result[len("REJECT:"):].strip()
         messages = (
-            [SystemMessage(content=CODER_SYSTEM_PROMPT)]
+            [SystemMessage(content=CODER_SYSTEM_PROMPT, additional_kwargs={"cache_control": {"type": "ephemeral"}})]
             + compressed
             + [HumanMessage(content=(
                 f"⚠️ 代码评审未通过，请修复以下问题后重新写入文件：\n\n{rejection_reason}\n\n"
@@ -554,18 +571,37 @@ def coder_node(state: AgentState) -> dict:
         )
         logger.debug(f"  [coder_node] 消息历史已压缩: {len(state['messages'])} → {len(compressed)} 条（丢弃工具调用中间步骤）")
     else:
-        # 即使非重做路径，长链工具调用也可能导致 messages 膨胀。
-        # 进入节点时若总字符数超阈值，按相同策略硬压缩，保护成本上限。
+        # 三道水位保护，防止 context 无界膨胀。
         history = state["messages"]
-        total_chars = _estimate_messages_chars(history)
-        if total_chars > MAX_MESSAGE_CHARS:
+        token_count = _estimate_messages_tokens(history)
+
+        if token_count > MAX_TOKEN_LIMIT:
+            logger.warning(
+                "  [coder_node] token 数 %d 超过硬上限 %d，跳过 LLM 调用直接推进至测试阶段",
+                token_count, MAX_TOKEN_LIMIT,
+            )
+            return {
+                "messages": [AIMessage(
+                    content="[系统] token 超限，强制跳过编码步骤，推进至测试阶段。",
+                    name="Coder",
+                )]
+            }
+
+        if token_count > COMPRESS_TOKEN_LIMIT:
             compressed = _compress_messages(history)
             logger.warning(
-                "  [coder_node] messages 字符数 %d 超过阈值 %d，硬压缩: %d → %d 条",
-                total_chars, MAX_MESSAGE_CHARS, len(history), len(compressed),
+                "  [coder_node] token 数 %d 超过压缩阈值 %d，已压缩: %d → %d 条",
+                token_count, COMPRESS_TOKEN_LIMIT, len(history), len(compressed),
             )
-            history = compressed
-        messages = [SystemMessage(content=CODER_SYSTEM_PROMPT)] + history
+            history = compressed + [_WRAP_UP_HINT]
+        elif token_count > WARN_TOKEN_LIMIT:
+            logger.warning(
+                "  [coder_node] token 数 %d 超过预警阈值 %d，追加收尾提示",
+                token_count, WARN_TOKEN_LIMIT,
+            )
+            history = history + [_WRAP_UP_HINT]
+
+        messages = [SystemMessage(content=CODER_SYSTEM_PROMPT, additional_kwargs={"cache_control": {"type": "ephemeral"}})] + history
 
     response = _llm_with_tools.invoke(_ensure_ends_with_user(messages))
 
@@ -596,7 +632,7 @@ def test_runner_node(state: AgentState) -> dict:
     logger.info("🧪 [Node: test_runner_node] TestRunner 开始执行测试...")
 
     messages = [
-        SystemMessage(content=TEST_RUNNER_SYSTEM_PROMPT),
+        SystemMessage(content=TEST_RUNNER_SYSTEM_PROMPT, additional_kwargs={"cache_control": {"type": "ephemeral"}}),
         HumanMessage(content=(
             f"Planner 的执行计划：\n{state.get('plan', '无计划')}\n\n"
             "请根据计划决定运行哪些测试，然后执行并给出测试执行报告。\n"
@@ -670,7 +706,7 @@ def reviewer_node(state: AgentState) -> dict:
     )
 
     messages = [
-        SystemMessage(content=REVIEWER_SYSTEM_PROMPT),
+        SystemMessage(content=REVIEWER_SYSTEM_PROMPT, additional_kwargs={"cache_control": {"type": "ephemeral"}}),
         HumanMessage(content=(
             f"原始 Issue 需求：\n{state['issue_task']}\n\n"
             f"Planner 制定的执行计划：\n{state.get('plan', '无计划')}\n\n"

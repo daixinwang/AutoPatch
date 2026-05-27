@@ -18,10 +18,10 @@ RECURSION_LIMIT: int = int(os.getenv("RECURSION_LIMIT", "500"))
 
 # ── LLM ──────────────────────────────────────────────────
 # 各 Agent 专属模型，可通过同名环境变量覆盖。
-PLANNER_MODEL_NAME: str = os.getenv("PLANNER_MODEL_NAME", "claude-sonnet-4-6")
-CODER_MODEL_NAME: str = os.getenv("CODER_MODEL_NAME", "claude-sonnet-4-6")
-TEST_RUNNER_MODEL_NAME: str = os.getenv("TEST_RUNNER_MODEL_NAME", "claude-sonnet-4-6")
-REVIEWER_MODEL_NAME: str = os.getenv("REVIEWER_MODEL_NAME", "claude-sonnet-4-6")
+PLANNER_MODEL_NAME:     str = os.getenv("PLANNER_MODEL_NAME",     "claude-haiku-4-5-20251001")
+CODER_MODEL_NAME:       str = os.getenv("CODER_MODEL_NAME",       "claude-sonnet-4-6")
+TEST_RUNNER_MODEL_NAME: str = os.getenv("TEST_RUNNER_MODEL_NAME", "claude-haiku-4-5-20251001")
+REVIEWER_MODEL_NAME:    str = os.getenv("REVIEWER_MODEL_NAME",    "claude-sonnet-4-6")
 
 # ── 服务器 ───────────────────────────────────────────────
 MAX_CONCURRENT_PATCHES: int = int(os.getenv("MAX_CONCURRENT_PATCHES", "3"))
@@ -37,9 +37,13 @@ MAX_OUTPUT_BYTES: int = int(os.getenv("MAX_OUTPUT_BYTES", "8000"))
 GITHUB_RETRY_MAX_ATTEMPTS: int = int(os.getenv("GITHUB_RETRY_MAX_ATTEMPTS", "3"))
 GITHUB_RETRY_BACKOFF_BASE: float = float(os.getenv("GITHUB_RETRY_BACKOFF_BASE", "1.0"))
 
-# ── LLM Context 控制 ─────────────────────────────────────
-# Coder 进入节点时如果 messages 总字符数超过此阈值，触发硬压缩（保留 Issue + 各 Agent 摘要消息）。
-MAX_MESSAGE_CHARS: int = int(os.getenv("MAX_MESSAGE_CHARS", "100000"))
+# ── LLM Context 水位线（token 数，基于 cl100k_base 编码）────
+# 70% 水位：记录 warning + 在 coder_node 追加收尾提示，引导模型尽快完成
+WARN_TOKEN_LIMIT: int     = int(os.getenv("WARN_TOKEN_LIMIT",     "40000"))
+# 85% 水位：执行 _compress_messages() 压缩 + 追加收尾提示
+COMPRESS_TOKEN_LIMIT: int = int(os.getenv("COMPRESS_TOKEN_LIMIT", "50000"))
+# 100% 水位：跳过本次 coder_node LLM 调用，直接推进到 test_runner_node
+MAX_TOKEN_LIMIT: int      = int(os.getenv("MAX_TOKEN_LIMIT",      "60000"))
 # Reviewer 内部循环允许的工具调用总数（防止失控）。
 MAX_REVIEWER_TOOL_CALLS: int = int(os.getenv("MAX_REVIEWER_TOOL_CALLS", "8"))
 

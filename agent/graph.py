@@ -492,7 +492,7 @@ def planner_node(state: AgentState) -> dict:
 
     lang = state.get("repo_language", "Unknown") or "Unknown"
     messages = [
-        SystemMessage(content=PLANNER_SYSTEM_PROMPT),
+        SystemMessage(content=PLANNER_SYSTEM_PROMPT, additional_kwargs={"cache_control": {"type": "ephemeral"}}),
         HumanMessage(content=(
             f"目标仓库编程语言：{lang}\n\n"
             f"请根据以下 Issue 制定详细执行计划：\n\n{state['issue_task']}"
@@ -559,7 +559,7 @@ def coder_node(state: AgentState) -> dict:
         compressed = _compress_messages(state["messages"])
         rejection_reason = review_result[len("REJECT:"):].strip()
         messages = (
-            [SystemMessage(content=CODER_SYSTEM_PROMPT)]
+            [SystemMessage(content=CODER_SYSTEM_PROMPT, additional_kwargs={"cache_control": {"type": "ephemeral"}})]
             + compressed
             + [HumanMessage(content=(
                 f"⚠️ 代码评审未通过，请修复以下问题后重新写入文件：\n\n{rejection_reason}\n\n"
@@ -601,7 +601,7 @@ def coder_node(state: AgentState) -> dict:
             )
             history = history + [_WRAP_UP_HINT]
 
-        messages = [SystemMessage(content=CODER_SYSTEM_PROMPT)] + history
+        messages = [SystemMessage(content=CODER_SYSTEM_PROMPT, additional_kwargs={"cache_control": {"type": "ephemeral"}})] + history
 
     response = _llm_with_tools.invoke(_ensure_ends_with_user(messages))
 
@@ -632,7 +632,7 @@ def test_runner_node(state: AgentState) -> dict:
     logger.info("🧪 [Node: test_runner_node] TestRunner 开始执行测试...")
 
     messages = [
-        SystemMessage(content=TEST_RUNNER_SYSTEM_PROMPT),
+        SystemMessage(content=TEST_RUNNER_SYSTEM_PROMPT, additional_kwargs={"cache_control": {"type": "ephemeral"}}),
         HumanMessage(content=(
             f"Planner 的执行计划：\n{state.get('plan', '无计划')}\n\n"
             "请根据计划决定运行哪些测试，然后执行并给出测试执行报告。\n"
@@ -706,7 +706,7 @@ def reviewer_node(state: AgentState) -> dict:
     )
 
     messages = [
-        SystemMessage(content=REVIEWER_SYSTEM_PROMPT),
+        SystemMessage(content=REVIEWER_SYSTEM_PROMPT, additional_kwargs={"cache_control": {"type": "ephemeral"}}),
         HumanMessage(content=(
             f"原始 Issue 需求：\n{state['issue_task']}\n\n"
             f"Planner 制定的执行计划：\n{state.get('plan', '无计划')}\n\n"

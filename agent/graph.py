@@ -57,7 +57,9 @@ except Exception:
 
 from core.config import (
     MAX_CODER_STEPS,
-    MAX_MESSAGE_CHARS,
+    WARN_TOKEN_LIMIT,
+    COMPRESS_TOKEN_LIMIT,
+    MAX_TOKEN_LIMIT,
     MAX_REVIEW_RETRIES,
     MAX_REVIEWER_TOOL_CALLS,
     PLANNER_MODEL_NAME,
@@ -401,6 +403,14 @@ def _compress_messages(messages: list) -> list:
     ]
 
 
+_WRAP_UP_HINT = HumanMessage(content=(
+    "⚠️ 上下文剩余空间有限，请立即完成当前任务：\n"
+    "- 不要做额外的搜索或读取\n"
+    "- 直接输出完成报告\n"
+    "- 如果修改已完成，现在就结束"
+))
+
+
 # ══════════════════════════════════════════════
 # 5. Nodes 定义
 # ══════════════════════════════════════════════
@@ -561,17 +571,36 @@ def coder_node(state: AgentState) -> dict:
         )
         logger.debug(f"  [coder_node] 消息历史已压缩: {len(state['messages'])} → {len(compressed)} 条（丢弃工具调用中间步骤）")
     else:
-        # 即使非重做路径，长链工具调用也可能导致 messages 膨胀。
-        # 进入节点时若总字符数超阈值，按相同策略硬压缩，保护成本上限。
+        # 三道水位保护，防止 context 无界膨胀。
         history = state["messages"]
-        total_chars = _estimate_messages_chars(history)
-        if total_chars > MAX_MESSAGE_CHARS:
+        token_count = _estimate_messages_tokens(history)
+
+        if token_count > MAX_TOKEN_LIMIT:
+            logger.error(
+                "  [coder_node] token 数 %d 超过硬上限 %d，跳过 LLM 调用直接推进至测试阶段",
+                token_count, MAX_TOKEN_LIMIT,
+            )
+            return {
+                "messages": [AIMessage(
+                    content="[系统] token 超限，强制跳过编码步骤，推进至测试阶段。",
+                    name="Coder",
+                )]
+            }
+
+        if token_count > COMPRESS_TOKEN_LIMIT:
             compressed = _compress_messages(history)
             logger.warning(
-                "  [coder_node] messages 字符数 %d 超过阈值 %d，硬压缩: %d → %d 条",
-                total_chars, MAX_MESSAGE_CHARS, len(history), len(compressed),
+                "  [coder_node] token 数 %d 超过压缩阈值 %d，已压缩: %d → %d 条",
+                token_count, COMPRESS_TOKEN_LIMIT, len(history), len(compressed),
             )
-            history = compressed
+            history = list(compressed) + [_WRAP_UP_HINT]
+        elif token_count > WARN_TOKEN_LIMIT:
+            logger.warning(
+                "  [coder_node] token 数 %d 超过预警阈值 %d，追加收尾提示",
+                token_count, WARN_TOKEN_LIMIT,
+            )
+            history = list(history) + [_WRAP_UP_HINT]
+
         messages = [SystemMessage(content=CODER_SYSTEM_PROMPT)] + history
 
     response = _llm_with_tools.invoke(_ensure_ends_with_user(messages))

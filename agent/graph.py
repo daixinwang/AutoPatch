@@ -576,7 +576,7 @@ def coder_node(state: AgentState) -> dict:
         token_count = _estimate_messages_tokens(history)
 
         if token_count > MAX_TOKEN_LIMIT:
-            logger.error(
+            logger.warning(
                 "  [coder_node] token 数 %d 超过硬上限 %d，跳过 LLM 调用直接推进至测试阶段",
                 token_count, MAX_TOKEN_LIMIT,
             )
@@ -593,13 +593,13 @@ def coder_node(state: AgentState) -> dict:
                 "  [coder_node] token 数 %d 超过压缩阈值 %d，已压缩: %d → %d 条",
                 token_count, COMPRESS_TOKEN_LIMIT, len(history), len(compressed),
             )
-            history = list(compressed) + [_WRAP_UP_HINT]
+            history = compressed + [_WRAP_UP_HINT]
         elif token_count > WARN_TOKEN_LIMIT:
             logger.warning(
                 "  [coder_node] token 数 %d 超过预警阈值 %d，追加收尾提示",
                 token_count, WARN_TOKEN_LIMIT,
             )
-            history = list(history) + [_WRAP_UP_HINT]
+            history = history + [_WRAP_UP_HINT]
 
         messages = [SystemMessage(content=CODER_SYSTEM_PROMPT)] + history
 

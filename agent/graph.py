@@ -37,6 +37,9 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import MessagesState, add_messages
 from langgraph.prebuilt import ToolNode
 
+# 加载 .env 中的环境变量，必须早于 core.config 导入。
+load_dotenv()
+
 # 导入所有本地工具
 from tools.file_tools import edit_file, read_file, write_and_replace_file
 from tools.search_tools import (
@@ -74,10 +77,6 @@ import tiktoken
 _tokenizer = tiktoken.get_encoding("cl100k_base")  # 模块级缓存，只初始化一次
 
 logger = logging.getLogger(__name__)
-
-# 加载 .env 中的环境变量
-load_dotenv()
-
 
 # ══════════════════════════════════════════════
 # 1. State 定义

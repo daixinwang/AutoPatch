@@ -23,6 +23,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制应用代码
 COPY *.py ./
 COPY agent/ ./agent/
+COPY core/ ./core/
+COPY src/ ./src/
 COPY tools/ ./tools/
 COPY eval/ ./eval/
 

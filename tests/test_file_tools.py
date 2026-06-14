@@ -21,7 +21,8 @@ class TestReadFile:
 
     def test_read_file_not_found(self, tmp_workspace):
         result = read_file.invoke({"file_path": "no_such_file.txt"})
-        assert "错误" in result or "不存在" in result
+        assert "[ERROR]" in result
+        assert "File not found" in result
 
 
 class TestWriteAndReplaceFile:
@@ -31,21 +32,21 @@ class TestWriteAndReplaceFile:
         result = write_and_replace_file.invoke(
             {"file_path": "output.txt", "content": "new content"}
         )
-        assert "成功" in result
+        assert "[OK]" in result
         assert (tmp_workspace / "output.txt").read_text(encoding="utf-8") == "new content"
 
     def test_write_creates_parent_dirs(self, tmp_workspace):
         result = write_and_replace_file.invoke(
             {"file_path": "deep/nested/dir/file.py", "content": "# code"}
         )
-        assert "成功" in result
+        assert "[OK]" in result
         assert (tmp_workspace / "deep" / "nested" / "dir" / "file.py").exists()
 
     def test_write_rejects_test_file(self, tmp_workspace):
         result = write_and_replace_file.invoke(
             {"file_path": "tests/test_foo.py", "content": "# forbidden"}
         )
-        assert "拒绝" in result
+        assert "[REJECTED]" in result
         assert not (tmp_workspace / "tests" / "test_foo.py").exists()
 
 
@@ -59,7 +60,7 @@ class TestEditFile:
         result = edit_file.invoke(
             {"file_path": "code.py", "old_string": "y = 2", "new_string": "y = 42"}
         )
-        assert "成功" in result
+        assert "[OK]" in result
         assert "y = 42" in target.read_text(encoding="utf-8")
 
     def test_edit_file_no_match(self, tmp_workspace):
@@ -69,8 +70,8 @@ class TestEditFile:
         result = edit_file.invoke(
             {"file_path": "code.py", "old_string": "not here", "new_string": "replacement"}
         )
-        assert "错误" in result
-        assert "预览" in result or "500" in result
+        assert "[ERROR]" in result
+        assert "First 500 chars" in result
 
     def test_edit_file_multiple_matches(self, tmp_workspace):
         target = tmp_workspace / "code.py"
@@ -79,5 +80,5 @@ class TestEditFile:
         result = edit_file.invoke(
             {"file_path": "code.py", "old_string": "a = 1", "new_string": "a = 99"}
         )
-        assert "错误" in result
+        assert "[ERROR]" in result
         assert "3" in result

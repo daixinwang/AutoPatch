@@ -15,8 +15,11 @@ psycopg[binary,pool]>=3.1.0
 # LangChain 核心库
 langchain-core>=0.3.0,<0.4.0
 
-# OpenAI 接入层
-langchain-openai>=0.2.0,<0.3.0
+# Anthropic 兼容 Chat API 接入层
+langchain-anthropic>=0.3.0,<0.4.0
+
+# OpenAI Embeddings API 客户端（RAG 索引使用）
+openai>=1.0.0,<2.0.0
 
 # 数据验证与结构化定义
 pydantic>=2.0.0,<3.0.0

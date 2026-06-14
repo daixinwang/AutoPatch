@@ -152,12 +152,20 @@ cp .env.example .env
 Edit `.env`:
 
 ```ini
-OPENAI_API_KEY=sk-your-openai-key-here
+OPENAI_API_KEY=sk-your-chat-api-key-here
 GITHUB_TOKEN=ghp_your-github-token-here   # Optional, prevents rate limiting
 
 # Optional overrides
-OPENAI_MODEL_NAME=gpt-4o
-OPENAI_BASE_URL=https://your-proxy/v1     # If using a proxy
+PLANNER_MODEL_NAME=claude-haiku-4-5-20251001
+CODER_MODEL_NAME=claude-sonnet-4-6
+TEST_RUNNER_MODEL_NAME=claude-haiku-4-5-20251001
+REVIEWER_MODEL_NAME=claude-sonnet-4-6
+OPENAI_BASE_URL=https://your-proxy/v1     # Anthropic-compatible chat endpoint
+
+# Optional embedding overrides
+OPENAI_EMBED_API_KEY=sk-your-openai-embedding-key-here
+OPENAI_EMBED_BASE_URL=https://api.openai.com/v1
+RAG_EMBEDDING_MODEL=text-embedding-3-small
 
 # Checkpoint resume (optional — enables task resume after interruption)
 DATABASE_URL=postgresql://user:password@host:5432/autopatch
@@ -170,7 +178,7 @@ LOG_LEVEL=INFO                            # DEBUG / INFO / WARNING / ERROR
 
 # Agent tuning (optional)
 MAX_REVIEW_RETRIES=3                      # Max reviewer reject-and-retry cycles (default: 3)
-MAX_CODER_STEPS=25                        # Max tool calls per coder attempt (default: 25)
+MAX_CODER_STEPS=40                        # Max tool calls per coder attempt (default: 40)
 ```
 
 ### 3. Run
@@ -193,10 +201,10 @@ source .venv/bin/activate
 python autopatch.py https://github.com/owner/repo 42
 ```
 
-**Option C — Debug mode (hardcoded test issue):**
+**Option C — Local workspace debug (skip clone):**
 
 ```bash
-python main.py
+python autopatch.py owner/repo 42 --workspace-dir /path/to/local/repo --keep-workspace
 ```
 
 **Option D — Web Dashboard (manual):**
@@ -241,7 +249,8 @@ Options:
 | Layer | Technology |
 | ----- | ---------- |
 | Agent Framework | [LangGraph](https://github.com/langchain-ai/langgraph) 0.2.x |
-| LLM | OpenAI GPT-4o (via `langchain-openai`, token streaming enabled) |
+| LLM | Anthropic-compatible chat models via `langchain-anthropic` (`ChatAnthropic`, token streaming enabled) |
+| Embeddings | OpenAI Embeddings API via `openai` (`text-embedding-3-small` by default) |
 | Code Search | Python AST + `re` (no external deps) |
 | Test Execution | `subprocess` sandboxed runner — Python, Node.js, Rust, Go, Java, Make |
 | GitHub Integration | GitHub REST API v3 (`requests`) |

@@ -28,7 +28,7 @@ from core.config import (
 logger = logging.getLogger(__name__)
 
 _COLLECTION_NAME = "code_chunks"
-_BATCH_SIZE = 100  # 每批 embed 的 chunk 数
+_BATCH_SIZE = 10  # DashScope text-embedding-v4 rejects larger embedding batches.
 
 
 def _repo_hash(repo_path: str) -> str:

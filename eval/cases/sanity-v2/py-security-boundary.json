@@ -1,0 +1,17 @@
+{
+  "case_id": "py-security-boundary",
+  "dataset": "sanity-v2",
+  "language": "Python",
+  "issue_title": "Internal URL detection should respect hostname boundaries",
+  "fixture_path": "eval/fixtures/sanity-v2/py-security-boundary",
+  "issue_body": "The internal URL allowlist is too broad. 'https://internal.example.com.evil.test' must not be treated as internal, while the root internal host and real subdomains should remain allowed.",
+  "fail_to_pass": [
+    "tests/test_urls.py::test_rejects_suffix_spoofing_host"
+  ],
+  "pass_to_pass": [
+    "tests/test_urls.py::test_allows_root_and_subdomain"
+  ],
+  "expected_modified_files": [
+    "security/urls.py"
+  ]
+}

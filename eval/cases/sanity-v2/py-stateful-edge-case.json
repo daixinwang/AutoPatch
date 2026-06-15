@@ -1,0 +1,17 @@
+{
+  "case_id": "py-stateful-edge-case",
+  "dataset": "sanity-v2",
+  "language": "Python",
+  "issue_title": "Cancelled reservations should release stock",
+  "fixture_path": "eval/fixtures/sanity-v2/py-stateful-edge-case",
+  "issue_body": "Cancelling a pending reservation should make the reserved units available again. Confirmed reservations should still keep the stock deducted.",
+  "fail_to_pass": [
+    "tests/test_inventory.py::test_cancel_pending_reservation_releases_stock"
+  ],
+  "pass_to_pass": [
+    "tests/test_inventory.py::test_confirmed_reservation_keeps_stock_deducted"
+  ],
+  "expected_modified_files": [
+    "warehouse/inventory.py"
+  ]
+}

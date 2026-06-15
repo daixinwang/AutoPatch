@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from eval.sanity import (
+    _write_report_md,
     run_baseline_only,
     run_dataset_with_agent,
     run_dataset_baseline_only,
@@ -68,6 +69,22 @@ def test_dataset_baseline_only_writes_aggregate_reports(tmp_path):
     assert report["infra_error"] == 0
     assert config["dataset_name"] == "sanity-v1"
     assert (run_dir / "report.md").exists()
+
+
+def test_report_md_uses_dataset_name_in_title(tmp_path):
+    report_path = tmp_path / "report.md"
+
+    _write_report_md(
+        report_path,
+        {
+            "run_id": "test-run",
+            "dataset_name": "sanity-v2",
+            "total_cases": 0,
+            "cases": [],
+        },
+    )
+
+    assert report_path.read_text(encoding="utf-8").startswith("# sanity-v2 Report")
 
 
 def test_mock_patch_marks_resolved_for_correct_patch(tmp_path):

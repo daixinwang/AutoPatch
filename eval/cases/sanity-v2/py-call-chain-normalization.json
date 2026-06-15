@@ -1,0 +1,17 @@
+{
+  "case_id": "py-call-chain-normalization",
+  "dataset": "sanity-v2",
+  "language": "Python",
+  "issue_title": "User lookup should normalize email through the service call chain",
+  "fixture_path": "eval/fixtures/sanity-v2/py-call-chain-normalization",
+  "issue_body": "Users can sign in with mixed-case email addresses, but profile lookup fails before reaching the repository key. Normalize email lookup without changing unknown-user behavior.",
+  "fail_to_pass": [
+    "tests/test_profiles.py::test_get_profile_accepts_mixed_case_email"
+  ],
+  "pass_to_pass": [
+    "tests/test_profiles.py::test_get_profile_returns_none_for_unknown_email"
+  ],
+  "expected_modified_files": [
+    "accounts/service.py"
+  ]
+}

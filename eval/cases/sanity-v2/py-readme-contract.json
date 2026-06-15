@@ -1,0 +1,17 @@
+{
+  "case_id": "py-readme-contract",
+  "dataset": "sanity-v2",
+  "language": "Python",
+  "issue_title": "Money formatting must follow the README rounding contract",
+  "fixture_path": "eval/fixtures/sanity-v2/py-readme-contract",
+  "issue_body": "The README says displayed USD amounts must be rounded to cents, not truncated. '$1.239' should display as '$1.24'. Existing whole-dollar formatting should keep working.",
+  "fail_to_pass": [
+    "tests/test_money.py::test_format_usd_rounds_to_cents"
+  ],
+  "pass_to_pass": [
+    "tests/test_money.py::test_format_usd_keeps_two_decimals"
+  ],
+  "expected_modified_files": [
+    "billing/money.py"
+  ]
+}

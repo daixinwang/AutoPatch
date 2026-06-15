@@ -724,7 +724,7 @@ def _write_report_md(path: Path, report: dict[str, Any]) -> None:
         ("Infra error", "infra_error"),
     ]
     lines = [
-        "# sanity-v1 Report",
+        f"# {report['dataset_name']} Report",
         "",
         f"Run ID: `{report['run_id']}`",
         f"Dataset: `{report['dataset_name']}`",

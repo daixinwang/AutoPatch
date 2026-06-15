@@ -1,0 +1,17 @@
+{
+  "case_id": "py-error-message-indirect",
+  "dataset": "sanity-v2",
+  "language": "Python",
+  "issue_title": "Quantity validation should report the field name",
+  "fixture_path": "eval/fixtures/sanity-v2/py-error-message-indirect",
+  "issue_body": "Creating an order with quantity=0 raises a generic validation error. API callers need the message to include the field name: 'quantity must be a positive integer'. Keep valid order totals unchanged.",
+  "fail_to_pass": [
+    "tests/test_orders.py::test_invalid_quantity_mentions_field_name"
+  ],
+  "pass_to_pass": [
+    "tests/test_orders.py::test_valid_order_total"
+  ],
+  "expected_modified_files": [
+    "orders/validators.py"
+  ]
+}

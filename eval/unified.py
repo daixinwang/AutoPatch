@@ -22,7 +22,7 @@ from eval.unified_runner import EvalMode, UnifiedEvalRunner
 from eval.unified_models import UnifiedCase
 
 
-DEFAULT_SWEBENCH_SMOKE_DATASET = "princeton-nlp/SWE-bench"
+DEFAULT_SWEBENCH_SMOKE_DATASET = "princeton-nlp/SWE-bench_Lite"
 DEFAULT_SWEBENCH_LITE_DATASET = "princeton-nlp/SWE-bench_Lite"
 DEFAULT_DATASET_SPLIT = "test"
 DEFAULT_DATASET_CASES_DIR = Path("eval/cases")

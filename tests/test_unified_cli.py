@@ -1,7 +1,9 @@
 import json
 from pathlib import Path
 
-from eval.unified import build_parser, resolve_cases
+import pytest
+
+from eval.unified import DEFAULT_SWEBENCH_SMOKE_DATASET, build_parser, resolve_cases
 
 
 def test_parser_accepts_sanity_agent_mode():
@@ -64,3 +66,52 @@ def test_resolve_cases_loads_local_json_swebench_instance():
         dataset_path.unlink(missing_ok=True)
 
     assert [case.case_id for case in cases] == ["local__case-1"]
+
+
+def test_resolve_cases_swebench_smoke_uses_lite_dataset(monkeypatch):
+    captured = {}
+
+    class FakeSmokeProvider:
+        def __init__(
+            self,
+            dataset_name,
+            dataset_split,
+            repos,
+            shuffle,
+            seed,
+            max_instances,
+        ):
+            captured["dataset_name"] = dataset_name
+            captured["dataset_split"] = dataset_split
+            captured["repos"] = repos
+            captured["shuffle"] = shuffle
+            captured["seed"] = seed
+            captured["max_instances"] = max_instances
+
+        def load(self):
+            return []
+
+    monkeypatch.setattr("eval.unified.SWEBenchSmokeProvider", FakeSmokeProvider)
+
+    args = build_parser().parse_args(
+        [
+            "--dataset",
+            "swebench-smoke",
+            "--mode",
+            "agent",
+            "--dataset-split",
+            "train",
+            "--seed",
+            "7",
+        ]
+    )
+
+    cases = resolve_cases(args)
+
+    assert captured["dataset_name"] == DEFAULT_SWEBENCH_SMOKE_DATASET
+    assert captured["dataset_split"] == "train"
+    assert captured["repos"] is None
+    assert captured["shuffle"] is False
+    assert captured["seed"] == 7
+    assert captured["max_instances"] is None
+    assert cases == []

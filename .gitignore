@@ -44,11 +44,15 @@ frontend/.vite/
 *.tsbuildinfo
 
 # ── AutoPatch 产物 ─────────────────────────
-# 文档目录（plans/specs/结果等本地产物，不提交）
-docs/
+# 文档本身允许提交；仅忽略本地私有文档和 Superpowers 计划产物
+docs/local/
+docs/superpowers/
 
 # 评测结果（包含运行产物和 patch，不提交）
 eval/results/
+
+# RAG 向量索引缓存（运行时生成，可重建）
+.autopatch_cache/
 
 # 生成的补丁文件目录
 patches/

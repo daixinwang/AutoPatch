@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 _COLLECTION_NAME = "code_chunks"
 _BATCH_SIZE = 10  # DashScope text-embedding-v4 rejects larger embedding batches.
+_MAX_EMBEDDING_INPUT_CHARS = 8192
 
 
 def _repo_hash(repo_path: str) -> str:
@@ -153,7 +154,7 @@ def _chunk_to_text(chunk: CodeChunk) -> str:
     if chunk.docstring:
         parts.append(f"Docstring: {chunk.docstring}")
     parts.append(chunk.code)
-    return "\n".join(parts)
+    return "\n".join(parts)[:_MAX_EMBEDDING_INPUT_CHARS]
 
 
 def _chunk_to_metadata(chunk: CodeChunk) -> dict:

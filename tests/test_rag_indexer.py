@@ -2,7 +2,7 @@
 from unittest.mock import MagicMock
 
 from src.rag.chunker import CodeChunk
-from src.rag.indexer import CodeIndexer, _embed_with_retry
+from src.rag.indexer import CodeIndexer, _chunk_to_text, _embed_with_retry
 
 
 def test_embed_with_retry_passes_embedding_dimensions():
@@ -69,3 +69,20 @@ def test_indexer_batches_embeddings_at_provider_limit(monkeypatch, tmp_path):
     assert total == 25
     assert embed_batch_sizes == [10, 10, 5]
     assert upsert_batch_sizes == [10, 10, 5]
+
+
+def test_chunk_to_text_caps_embedding_input_length():
+    chunk = CodeChunk(
+        file_path="huge_module.py",
+        symbol_name="huge_function",
+        symbol_type="function",
+        start_line=1,
+        end_line=9000,
+        code="x" * 9000,
+        docstring="doc",
+    )
+
+    text = _chunk_to_text(chunk)
+
+    assert len(text) <= 8192
+    assert text.startswith("File: huge_module.py\nSymbol: huge_function (function)")

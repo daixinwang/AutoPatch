@@ -156,6 +156,7 @@ def run_agent_on_issue(
         }
 
         NODE_ICONS = {
+            "index_builder_node": "🔎 IndexBuilder",
             "planner_node":     "📋 Planner",
             "coder_node":       "💻 Coder",
             "tool_node":        "🔧 Tools",
@@ -175,6 +176,8 @@ def run_agent_on_issue(
             for node_name, node_output in chunk.items():
                 icon = NODE_ICONS.get(node_name, f"[{node_name}]")
                 logger.info(f"[Step {step_count}] {icon}")
+                if node_output is None:
+                    continue
 
                 if "plan" in node_output and node_output["plan"]:
                     preview = node_output["plan"][:120].replace("\n", " ")

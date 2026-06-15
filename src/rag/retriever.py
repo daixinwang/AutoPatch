@@ -42,13 +42,22 @@ class CodeRetriever:
         collection: ChromaDB collection（来自 CodeIndexer.get_collection()）
         chunks: 全量 CodeChunk 列表（用于 BM25 和结果映射）
         embedding_model: OpenAI embedding 模型名
+        embedding_dimensions: Embedding 向量维度；0 表示不显式传递 dimensions 参数
         openai_client: openai.OpenAI 实例
     """
 
-    def __init__(self, collection, chunks: list, embedding_model: str, openai_client):
+    def __init__(
+        self,
+        collection,
+        chunks: list,
+        embedding_model: str,
+        openai_client,
+        embedding_dimensions: int = 0,
+    ):
         self._collection = collection
         self._chunks = chunks
         self._model = embedding_model
+        self._dimensions = embedding_dimensions
         self._openai = openai_client
         self._chunk_ids = [chunk_id(c) for c in chunks]
         self._id_to_chunk: dict = dict(zip(self._chunk_ids, chunks))
@@ -84,9 +93,10 @@ class CodeRetriever:
         # ── 向量检索 ──
         vector_ids: list = []
         try:
-            embedding = self._openai.embeddings.create(
-                input=[query], model=self._model
-            ).data[0].embedding
+            kwargs = {"input": [query], "model": self._model}
+            if self._dimensions > 0:
+                kwargs["dimensions"] = self._dimensions
+            embedding = self._openai.embeddings.create(**kwargs).data[0].embedding
             result = self._collection.query(
                 query_embeddings=[embedding],
                 n_results=n_candidates,

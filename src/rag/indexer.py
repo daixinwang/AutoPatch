@@ -17,7 +17,13 @@ import chromadb
 from chromadb.config import Settings
 
 from src.rag.chunker import CodeChunk
-from core.config import RAG_CACHE_DIR, RAG_EMBEDDING_MODEL, OPENAI_EMBED_API_KEY, OPENAI_EMBED_BASE_URL
+from core.config import (
+    RAG_CACHE_DIR,
+    RAG_EMBEDDING_MODEL,
+    RAG_EMBEDDING_DIMENSIONS,
+    OPENAI_EMBED_API_KEY,
+    OPENAI_EMBED_BASE_URL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +42,20 @@ def chunk_id(chunk: CodeChunk) -> str:
     return hashlib.md5(key.encode()).hexdigest()[:16]
 
 
-def _embed_with_retry(client, texts: list[str], model: str, max_retries: int = 3) -> list[list[float]]:
+def _embed_with_retry(
+    client,
+    texts: list[str],
+    model: str,
+    dimensions: int = 0,
+    max_retries: int = 3,
+) -> list[list[float]]:
     """调用 OpenAI Embedding API，失败时指数退避重试。"""
     for attempt in range(max_retries):
         try:
-            response = client.embeddings.create(input=texts, model=model)
+            kwargs = {"input": texts, "model": model}
+            if dimensions > 0:
+                kwargs["dimensions"] = dimensions
+            response = client.embeddings.create(**kwargs)
             return [item.embedding for item in response.data]
         except Exception as e:
             wait = 2 ** attempt
@@ -78,6 +93,7 @@ class CodeIndexer:
             base_url=OPENAI_EMBED_BASE_URL or None,
         )
         self._model = RAG_EMBEDDING_MODEL
+        self._dimensions = RAG_EMBEDDING_DIMENSIONS
 
     def build_or_update(self, chunks: list[CodeChunk]) -> int:
         """
@@ -108,7 +124,12 @@ class CodeIndexer:
             metadatas = [_chunk_to_metadata(c) for _, c in batch]
             documents = [c.code for _, c in batch]
             try:
-                embeddings = _embed_with_retry(self._openai, texts, self._model)
+                embeddings = _embed_with_retry(
+                    self._openai,
+                    texts,
+                    self._model,
+                    dimensions=self._dimensions,
+                )
                 self._collection.upsert(
                     ids=ids, embeddings=embeddings,
                     documents=documents, metadatas=metadatas,

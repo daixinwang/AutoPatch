@@ -137,6 +137,12 @@ OPENAI_BASE_URL=https://your-proxy/v1     # Anthropic-compatible Chat 接口
 OPENAI_EMBED_API_KEY=sk-your-openai-embedding-key-here
 OPENAI_EMBED_BASE_URL=https://api.openai.com/v1
 RAG_EMBEDDING_MODEL=text-embedding-3-small
+RAG_EMBEDDING_DIMENSIONS=0
+
+# 阿里云百炼 DashScope compatible embedding 示例
+# OPENAI_EMBED_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+# RAG_EMBEDDING_MODEL=text-embedding-v4
+# RAG_EMBEDDING_DIMENSIONS=1024
 
 # 断点续传（可选 — 启用后任务中断可恢复）
 DATABASE_URL=postgresql://user:password@host:5432/autopatch
@@ -221,7 +227,7 @@ python autopatch.py <repo_url> <issue_number> [选项]
 | ---- | ---- |
 | Agent 框架 | [LangGraph](https://github.com/langchain-ai/langgraph) 0.2.x |
 | 大语言模型 | Anthropic-compatible Chat 模型（via `langchain-anthropic` / `ChatAnthropic`，已启用 token 流式输出）|
-| Embedding | OpenAI Embeddings API（via `openai`，默认 `text-embedding-3-small`）|
+| Embedding | OpenAI-compatible Embeddings API（via `openai`，默认 `text-embedding-3-small`）|
 | 代码检索 | Python AST + `re`（无额外依赖）|
 | 测试执行 | `subprocess` 沙箱运行器 — Python、Node.js、Rust、Go、Java、Make |
 | GitHub 集成 | GitHub REST API v3（`requests`）|

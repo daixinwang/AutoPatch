@@ -132,3 +132,21 @@ def test_retrieve_empty_index():
     )
     results = retriever.retrieve("anything")
     assert results == []
+
+
+def test_retrieve_passes_embedding_dimensions(sample_chunks, mock_collection, mock_openai_client):
+    retriever = CodeRetriever(
+        collection=mock_collection,
+        chunks=sample_chunks,
+        embedding_model="text-embedding-v4",
+        openai_client=mock_openai_client,
+        embedding_dimensions=1024,
+    )
+
+    retriever.retrieve("authenticate user login")
+
+    mock_openai_client.embeddings.create.assert_called_once_with(
+        input=["authenticate user login"],
+        model="text-embedding-v4",
+        dimensions=1024,
+    )

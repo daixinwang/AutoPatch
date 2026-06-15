@@ -50,6 +50,8 @@ MAX_REVIEWER_TOOL_CALLS: int = int(os.getenv("MAX_REVIEWER_TOOL_CALLS", "8"))
 # ── 代码 RAG 配置 ──────────────────────────────────────────
 # Embedding 模型（OpenAI text-embedding-3-small）
 RAG_EMBEDDING_MODEL: str = os.getenv("RAG_EMBEDDING_MODEL", "text-embedding-3-small")
+# Embedding 向量维度；0 表示不显式传递 dimensions 参数。
+RAG_EMBEDDING_DIMENSIONS: int = int(os.getenv("RAG_EMBEDDING_DIMENSIONS", "0") or "0")
 # RAG 索引缓存根目录
 RAG_CACHE_DIR: str = os.getenv("RAG_CACHE_DIR", ".autopatch_cache")
 # OpenAI Embedding 专属 API Key（与 Anthropic 代理的 OPENAI_API_KEY 分开）

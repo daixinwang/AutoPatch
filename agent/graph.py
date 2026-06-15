@@ -439,7 +439,12 @@ def index_builder_node(state: AgentState) -> dict:
         from src.rag.indexer import CodeIndexer
         from src.rag.retriever import CodeRetriever
         from tools.workspace import get_workspace, set_retriever
-        from core.config import RAG_EMBEDDING_MODEL, OPENAI_EMBED_API_KEY, OPENAI_EMBED_BASE_URL
+        from core.config import (
+            RAG_EMBEDDING_MODEL,
+            RAG_EMBEDDING_DIMENSIONS,
+            OPENAI_EMBED_API_KEY,
+            OPENAI_EMBED_BASE_URL,
+        )
 
         repo_path = get_workspace()
 
@@ -459,6 +464,7 @@ def index_builder_node(state: AgentState) -> dict:
             collection=indexer.get_collection(),
             chunks=chunks,
             embedding_model=RAG_EMBEDDING_MODEL,
+            embedding_dimensions=RAG_EMBEDDING_DIMENSIONS,
             openai_client=openai_client,
         )
         set_retriever(retriever)
@@ -499,7 +505,7 @@ def planner_node(state: AgentState) -> dict:
     ]
 
     response: AIMessage = _llm_planner.invoke(_ensure_ends_with_user(messages))
-    plan_text: str = response.content
+    plan_text: str = _extract_text(response.content)
 
     logger.info(f"📋 [Node: planner_node] 计划制定完成（{len(plan_text)} 字符）")
     logger.debug(f"  计划预览: {plan_text[:120]}...")

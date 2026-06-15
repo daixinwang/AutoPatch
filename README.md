@@ -98,7 +98,7 @@ AutoPatch includes built-in semantic code retrieval to bridge the vocabulary gap
 ### How It Works
 
 1. **AST chunking** — Python `.py` files in the target repo are parsed by the `ast` module and split into function/class/method/module chunks
-2. **Vector indexing** — Each chunk is embedded with OpenAI `text-embedding-3-small` and stored in ChromaDB (`.autopatch_cache/rag_index/`)
+2. **Vector indexing** — Each chunk is embedded with an OpenAI-compatible embedding API and stored in ChromaDB (`.autopatch_cache/rag_index/`)
 3. **Hybrid retrieval** — Vector similarity + BM25 keyword search are fused via Reciprocal Rank Fusion (RRF), returning Top-5 results
 4. **Workflow integration** — An `index_builder_node` runs automatically before the Planner; the Coder can call `semantic_search_codebase` as a tool
 
@@ -109,6 +109,7 @@ AutoPatch includes built-in semantic code retrieval to bridge the vocabulary gap
 | `OPENAI_EMBED_API_KEY` | falls back to `OPENAI_API_KEY` | Dedicated OpenAI API key for embeddings |
 | `OPENAI_EMBED_BASE_URL` | *(official endpoint)* | Custom embedding API base URL |
 | `RAG_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model name |
+| `RAG_EMBEDDING_DIMENSIONS` | `0` | Optional embedding vector dimension; `0` means do not send `dimensions` |
 | `RAG_CACHE_DIR` | `.autopatch_cache` | Root directory for index cache |
 
 ### Notes
@@ -166,6 +167,12 @@ OPENAI_BASE_URL=https://your-proxy/v1     # Anthropic-compatible chat endpoint
 OPENAI_EMBED_API_KEY=sk-your-openai-embedding-key-here
 OPENAI_EMBED_BASE_URL=https://api.openai.com/v1
 RAG_EMBEDDING_MODEL=text-embedding-3-small
+RAG_EMBEDDING_DIMENSIONS=0
+
+# Alibaba Cloud Bailian DashScope compatible embedding example
+# OPENAI_EMBED_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+# RAG_EMBEDDING_MODEL=text-embedding-v4
+# RAG_EMBEDDING_DIMENSIONS=1024
 
 # Checkpoint resume (optional — enables task resume after interruption)
 DATABASE_URL=postgresql://user:password@host:5432/autopatch

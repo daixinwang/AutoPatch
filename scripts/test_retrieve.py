@@ -26,7 +26,12 @@ from src.rag.chunker import CodeChunker
 from src.rag.indexer import CodeIndexer
 from src.rag.retriever import CodeRetriever
 import openai
-from core.config import RAG_EMBEDDING_MODEL, OPENAI_EMBED_API_KEY, OPENAI_EMBED_BASE_URL
+from core.config import (
+    RAG_EMBEDDING_MODEL,
+    RAG_EMBEDDING_DIMENSIONS,
+    OPENAI_EMBED_API_KEY,
+    OPENAI_EMBED_BASE_URL,
+)
 from core.logging_config import setup_logging
 
 setup_logging()
@@ -36,6 +41,8 @@ REPO = sys.argv[1] if len(sys.argv) > 1 else "."
 print(f"\n=== AutoPatch 语义检索测试 ===")
 print(f"仓库路径: {os.path.abspath(REPO)}")
 print(f"Embedding 模型: {RAG_EMBEDDING_MODEL}")
+if RAG_EMBEDDING_DIMENSIONS > 0:
+    print(f"Embedding 维度: {RAG_EMBEDDING_DIMENSIONS}")
 
 if not OPENAI_EMBED_API_KEY:
     print("\n⚠️  警告: OPENAI_EMBED_API_KEY 未设置，向量检索不可用，将仅使用 BM25。")
@@ -66,6 +73,7 @@ retriever = CodeRetriever(
     collection=indexer.get_collection(),
     chunks=chunks,
     embedding_model=RAG_EMBEDDING_MODEL,
+    embedding_dimensions=RAG_EMBEDDING_DIMENSIONS,
     openai_client=openai_client,
 )
 print("  就绪!")

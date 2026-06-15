@@ -19,16 +19,23 @@ class LocalSanityProvider:
         self.dataset_name = dataset_name
         self.cases_dir = cases_dir
 
+    @staticmethod
+    def _normalize_expected_files(case: dict) -> List[str]:
+        expected_files = case.get("expected_files")
+        if expected_files is None:
+            expected_files = case.get("expected_modified_files")
+        if expected_files is None:
+            return []
+        if isinstance(expected_files, str):
+            return [expected_files]
+        return expected_files
+
     def load(self) -> List[UnifiedCase]:
         cases = []
         for case_file in sorted(self.cases_dir.glob("*.json")):
             case = json.loads(case_file.read_text(encoding="utf-8"))
 
-            expected_files = case.get("expected_files")
-            if expected_files is None:
-                expected_files = case.get("expected_modified_files", [])
-            elif isinstance(expected_files, str):
-                expected_files = [expected_files]
+            expected_files = self._normalize_expected_files(case)
 
             source = case.get("source", "local_sanity")
             cases.append(
@@ -72,28 +79,40 @@ class SWEBenchProvider:
         self.seed = seed
         self.max_instances = max_instances
 
+    def _resolved_dataset_name(self) -> str:
+        dataset_path = Path(self.dataset_name)
+        if self.dataset_name == "princeton-nlp/SWE-bench_Lite":
+            return "swebench-lite"
+        if dataset_path.exists() and dataset_path.suffix == ".json":
+            return dataset_path.stem
+        return self.dataset_name
+
     def load(self) -> List[UnifiedCase]:
         items = [_parse_item(item) for item in _load_raw(self.dataset_name, self.dataset_split)]
+        filtered_items = items
 
         if self.instance_ids is not None:
-            instance_id_set = set(self.instance_ids)
-            items = [item for item in items if item.instance_id in instance_id_set]
-
+            items_by_id = {item.instance_id: item for item in items}
+            filtered_items = [
+                items_by_id[instance_id]
+                for instance_id in self.instance_ids
+                if instance_id in items_by_id
+            ]
         if self.repos is not None:
             repo_set = set(self.repos)
-            items = [item for item in items if item.repo in repo_set]
+            filtered_items = [item for item in filtered_items if item.repo in repo_set]
 
         if self.shuffle:
             random.seed(self.seed)
-            random.shuffle(items)
+            random.shuffle(filtered_items)
 
         if self.max_instances is not None:
-            items = items[: self.max_instances]
+            filtered_items = filtered_items[: self.max_instances]
 
         return [
             UnifiedCase(
                 case_id=item.instance_id,
-                dataset_name="swebench-lite",
+                dataset_name=self._resolved_dataset_name(),
                 source="swe_bench",
                 repo=item.repo,
                 base_commit=item.base_commit,
@@ -110,7 +129,7 @@ class SWEBenchProvider:
                 version=item.version,
                 raw=item.__dict__,
             )
-            for item in items
+            for item in filtered_items
         ]
 
 

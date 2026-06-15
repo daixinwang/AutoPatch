@@ -65,13 +65,89 @@ def test_swebench_provider_loads_local_json_and_filters(tmp_path):
     cases = provider.load()
 
     assert [case.case_id for case in cases] == ["django__django-100"]
-    assert cases[0].dataset_name == "swebench-lite"
+    assert cases[0].dataset_name == "swebench"
     assert cases[0].source == "swe_bench"
     assert cases[0].workspace_strategy == "swebench_instance"
     assert cases[0].issue_title == "SWE-bench issue django__django-100"
     assert cases[0].issue_body == "Fix query behavior."
     assert cases[0].swebench_gold_patch == "gold diff"
     assert cases[0].fail_to_pass == ["tests.test_x.TestCase.test_bug"]
+
+
+def test_swebench_provider_preserves_instance_id_order(tmp_path):
+    data = [
+        {
+            "instance_id": "sympy__sympy-200",
+            "repo": "sympy/sympy",
+            "base_commit": "def456",
+            "problem_statement": "Fix simplify behavior.",
+            "test_patch": "",
+            "patch": "",
+            "FAIL_TO_PASS": ["tests.test_x.TestCase.test_bug"],
+            "PASS_TO_PASS": [],
+        },
+        {
+            "instance_id": "django__django-100",
+            "repo": "django/django",
+            "base_commit": "abc123",
+            "problem_statement": "Fix query behavior.",
+            "test_patch": "",
+            "patch": "",
+            "FAIL_TO_PASS": ["tests.test_x.TestCase.test_bug"],
+            "PASS_TO_PASS": [],
+        },
+    ]
+    dataset = tmp_path / "swebench.json"
+    dataset.write_text(json.dumps(data), encoding="utf-8")
+
+    provider = SWEBenchProvider(
+        dataset_name=str(dataset),
+        dataset_split="test",
+        instance_ids=["django__django-100", "sympy__sympy-200"],
+    )
+
+    cases = provider.load()
+
+    assert [case.case_id for case in cases] == [
+        "django__django-100",
+        "sympy__sympy-200",
+    ]
+
+
+def test_local_sanity_provider_tolerates_null_expected_file_fields(tmp_path):
+    cases_dir = tmp_path / "cases"
+    cases_dir.mkdir()
+    case_path = cases_dir / "null-expected-files.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "case_id": "null-expected-files",
+                "source": "local_sanity",
+                "repo": "local/sanity-null-expected",
+                "base_commit": None,
+                "fixture_path": "eval/fixtures/sanity-v1/py-single-file",
+                "issue_title": "Case handles null expected files",
+                "issue_body": "Should normalize missing expectations.",
+                "language": "Python",
+                "fail_to_pass": [],
+                "pass_to_pass": [],
+                "expected_files": None,
+                "expected_modified_files": None,
+                "allow_test_modifications": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    provider = LocalSanityProvider(
+        dataset_name="sanity-v1",
+        cases_dir=cases_dir,
+    )
+
+    cases = provider.load()
+    case = cases[0]
+
+    assert case.expected_files == []
 
 
 def test_swebench_smoke_provider_uses_pinned_ids(tmp_path):

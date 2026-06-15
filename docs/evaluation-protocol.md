@@ -3,6 +3,19 @@
 > 状态：所有新评测的基准协议。
 > 之前零散、临时的评测结果不纳入本协议下生成的报告。
 
+## 推荐入口
+
+新的统一评测入口是：
+
+```bash
+python -m eval.unified --dataset sanity-v1 --mode baseline-only
+python -m eval.unified --dataset sanity-v2 --mode agent
+python -m eval.unified --dataset swebench-smoke --mode agent
+python -m eval.unified --dataset swebench-lite --mode agent --instance-ids <instance_id>
+```
+
+`python -m eval.sanity` 和 `python run_eval.py` 仍保留为兼容入口；新评测结果应优先使用 `eval.unified` 产物目录和 verdict 定义。
+
 ## 目标
 
 用可复现、可审计的方式评测 AutoPatch 作为 coding agent 的能力。每一条被汇报的结果都必须回答三个问题：

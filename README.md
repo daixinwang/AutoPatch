@@ -249,6 +249,26 @@ Options:
   --no-comments          Skip fetching issue comments
 ```
 
+## Evaluation
+
+AutoPatch uses one evaluation protocol for local sanity benchmarks and SWE-bench style cases.
+
+```bash
+# Validate local fixtures without model calls
+python -m eval.unified --dataset sanity-v1 --mode baseline-only
+
+# Run the real agent on richer local sanity cases
+python -m eval.unified --dataset sanity-v2 --mode agent
+
+# Run a pinned smoke set of real SWE-bench Lite instances
+python -m eval.unified --dataset swebench-smoke --mode agent
+
+# Run selected SWE-bench Lite instances
+python -m eval.unified --dataset swebench-lite --mode agent --instance-ids <instance_id>
+```
+
+Results are written to `eval/results/<run_id>/` with per-case `case.json`, `issue.md`, `patch.diff`, `changed-files.json`, test logs, and `verdict.json`.
+
 ---
 
 ## Tech Stack

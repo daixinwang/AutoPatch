@@ -240,6 +240,10 @@ def run_python_script(
 
     Safety limits:
       - Only .py files are allowed
+      - script_path must be a relative path inside the workspace
+      - Do not use /dev/stdin, /tmp/*.py, heredocs, or absolute paths. For ad hoc
+        checks, first create a script such as ".autopatch_tmp/check.py" with
+        write_and_replace_file, then call run_python_script on that relative path.
       - Auto-terminates on timeout (default {DEFAULT_TIMEOUT_SECONDS}s, max {MAX_TIMEOUT_SECONDS}s)
       - Output truncated if it exceeds {MAX_OUTPUT_BYTES} bytes
 
@@ -278,6 +282,14 @@ def run_python_script(
 
     except Exception as e:
         error_msg = f"[ERROR] run_python_script failed: {type(e).__name__}: {e}"
+        if isinstance(e, ValueError):
+            error_msg += (
+                "\nHint: script_path must be a relative path inside the workspace. "
+                "Do not pass /dev/stdin, /tmp/*.py, or any absolute path. "
+                "For temporary checks, use write_and_replace_file to create "
+                '".autopatch_tmp/<name>.py" first, then call run_python_script '
+                "with that relative path."
+            )
         logger.error(f"  [Tool: run_python_script] {error_msg}")
         return error_msg
 

@@ -5,7 +5,7 @@ Tests for tools/execute_tools.py (verify_importable).
 """
 import pytest
 
-from tools.execute_tools import verify_importable
+from tools.execute_tools import run_python_script, verify_importable
 
 
 class TestVerifyImportable:
@@ -59,3 +59,21 @@ class TestVerifyImportable:
         result = verify_importable.invoke({"file_path": "src/mypkg/core.py"})
         assert "[OK]" in result
         assert "mypkg.core" in result
+
+
+class TestRunPythonScript:
+    """run_python_script tool tests."""
+
+    def test_rejects_dev_stdin_with_workspace_tmp_guidance(self, tmp_workspace):
+        result = run_python_script.invoke({"script_path": "/dev/stdin"})
+
+        assert "[ERROR]" in result
+        assert ".autopatch_tmp/" in result
+        assert "write_and_replace_file" in result
+
+    def test_rejects_tmp_script_with_workspace_tmp_guidance(self, tmp_workspace):
+        result = run_python_script.invoke({"script_path": "/tmp/list_files.py"})
+
+        assert "[ERROR]" in result
+        assert ".autopatch_tmp/" in result
+        assert "relative path inside the workspace" in result

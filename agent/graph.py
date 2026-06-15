@@ -244,6 +244,11 @@ TEST_RUNNER_SYSTEM_PROMPT = """You are an automated test executor responsible fo
 - `run_python_script(script_path, script_args, working_directory)`: Run a single Python script
 - `run_test_command(command, working_directory)`: Native test commands for any language (npm/cargo/go/make, etc.)
 
+`run_python_script` only accepts relative `.py` paths inside the workspace. Do not use
+`/dev/stdin`, `/tmp/*.py`, heredocs, or absolute paths. For ad hoc Python checks,
+first create a workspace-local script such as `.autopatch_tmp/check.py`, then run
+that relative path.
+
 ## ⚠️ Key Decision: Detect project type before choosing how to test
 
 **Step 1: Identify the project language**

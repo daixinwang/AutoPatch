@@ -43,15 +43,22 @@ def test_unified_runner_baseline_only_writes_protocol_artifacts(tmp_path):
     assert config["dataset_name"] == "sanity-v1"
     assert config["dataset_version"] == "2026-06-14"
     assert config["case_ids"] == ["py-single-file"]
-    assert config["agent_config"] == {
-        "mode": "baseline-only",
-        "rag_enabled": None,
-        "reviewer_enabled": None,
-    }
-    assert config["environment"] == {
-        "python_version": config["environment"]["python_version"],
-        "docker_enabled": False,
-    }
+    assert config["agent_config"]["mode"] == "baseline-only"
+    assert config["agent_config"]["planner_model"]
+    assert config["agent_config"]["coder_model"]
+    assert config["agent_config"]["test_runner_model"]
+    assert config["agent_config"]["reviewer_model"]
+    assert config["agent_config"]["temperature"] == 0
+    assert config["agent_config"]["max_review_retries"] == 3
+    assert config["agent_config"]["max_coder_steps"] == 40
+    assert "rag_enabled" in config["agent_config"]
+    assert "reviewer_enabled" in config["agent_config"]
+    assert config["environment"]["os"] in {"macOS", "Darwin", "Linux", "Windows"}
+    assert "architecture" in config["environment"]
+    assert "python_version" in config["environment"]
+    assert config["environment"]["docker_enabled"] is False
+    assert "docker_platform" in config["environment"]
+    assert config["timeouts"]["agent_seconds"] is None
     assert config["timeouts"]["test_seconds"] == 15
     assert config["timeouts"]["case_seconds"] == 30
     assert (case_dir / "case.json").exists()
@@ -128,6 +135,49 @@ def test_unified_runner_agent_failure_is_failed(tmp_path, monkeypatch):
     assert report["cases"][0]["verdict"] == "failed"
 
 
+def test_unified_runner_case_timeout_reports_agent_timeout(tmp_path, monkeypatch):
+    cases = LocalSanityProvider(
+        dataset_name="sanity-v1",
+        cases_dir=Path("eval/cases/sanity-v1"),
+    ).load()
+    selected = [case for case in cases if case.case_id == "py-single-file"]
+
+    runner = UnifiedEvalRunner(
+        cases=selected,
+        run_id="case-timeout",
+        results_dir=tmp_path,
+        mode="baseline-only",
+        eval_config=EvalConfig(timeout_per_instance=1),
+    )
+    runner.case_timeout_seconds = 0.05
+
+    import time
+
+    def slow_baseline(case, prepared, case_dir):
+        time.sleep(0.2)
+        return {
+            "verdict": "baseline_ready",
+            "reason": "Baseline is valid: FAIL_TO_PASS failed and PASS_TO_PASS passed before patch.",
+        }
+
+    monkeypatch.setattr(runner, "_run_baseline", slow_baseline)
+
+    report = runner.run()
+    case_dir = tmp_path / "case-timeout" / "cases" / "py-single-file"
+    verdict = json.loads((case_dir / "verdict.json").read_text(encoding="utf-8"))
+    report_json = json.loads((tmp_path / "case-timeout" / "report.json").read_text(encoding="utf-8"))
+
+    assert report["agent_timeout"] == 1
+    assert report_json["agent_timeout"] == 1
+    assert verdict["verdict"] == "agent_timeout"
+    assert verdict["failure_category"] == "timeout"
+    assert verdict["patch_applies"] is False
+    assert verdict["modified_test_files"] is False
+    assert "Case execution timed out" in verdict["reason"]
+    assert "tool_timeout" not in (case_dir / "verdict.json").read_text(encoding="utf-8")
+    assert "| Agent timeout | 1 |" in (tmp_path / "case-timeout" / "report.md").read_text(encoding="utf-8")
+
+
 def test_unified_runner_timeout_failure_category_uses_protocol_value(tmp_path, monkeypatch):
     cases = LocalSanityProvider(
         dataset_name="sanity-v1",
@@ -189,6 +239,7 @@ def test_unified_runner_timeout_failure_category_uses_protocol_value(tmp_path, m
     assert report["failed"] == 1
     assert report["infra_error"] == 0
     assert verdict["failure_category"] == "timeout"
+    assert "tool_timeout" not in (case_dir / "verdict.json").read_text(encoding="utf-8")
 
 
 def _git_baseline(workspace: Path) -> str:

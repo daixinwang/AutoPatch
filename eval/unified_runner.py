@@ -3,12 +3,25 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import platform
+import signal
 import traceback
+import threading
+import time
 from datetime import datetime, timezone
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
 from core.diff_generator import filter_diff, generate_diff
+from core.config import (
+    MAX_CODER_STEPS,
+    MAX_REVIEW_RETRIES,
+    CODER_MODEL_NAME,
+    PLANNER_MODEL_NAME,
+    REVIEWER_MODEL_NAME,
+    TEST_RUNNER_MODEL_NAME,
+)
 from eval.config import EvalConfig
 from eval.unified_models import PreparedWorkspace, UnifiedCase, classify_changed_file
 from eval.unified_preparers import LocalFixturePreparer, SWEBenchPreparer
@@ -87,14 +100,25 @@ class UnifiedEvalRunner:
             "case_ids": [case.case_id for case in self.cases],
             "agent_config": {
                 "mode": self.mode,
+                "planner_model": PLANNER_MODEL_NAME,
+                "coder_model": CODER_MODEL_NAME,
+                "test_runner_model": TEST_RUNNER_MODEL_NAME,
+                "reviewer_model": REVIEWER_MODEL_NAME,
+                "temperature": 0,
+                "max_review_retries": MAX_REVIEW_RETRIES,
+                "max_coder_steps": MAX_CODER_STEPS,
                 "rag_enabled": None,
                 "reviewer_enabled": None,
             },
             "environment": {
+                "os": self._normalized_os_name(),
+                "architecture": platform.machine() or None,
                 "python_version": sys.version.split()[0],
                 "docker_enabled": self.eval_config.use_docker,
+                "docker_platform": None,
             },
             "timeouts": {
+                "agent_seconds": None,
                 "test_seconds": self.selector_timeout_seconds,
                 "case_seconds": self.case_timeout_seconds,
             },
@@ -116,49 +140,55 @@ class UnifiedEvalRunner:
         prepared: Optional[PreparedWorkspace] = None
         verdict = "infra_error"
         failure_category: Optional[str] = None
+        start_time = time.monotonic()
         try:
-            prepared = self._prepare_workspace(case)
-            self._write_case_artifacts(case_dir, case, prepared)
-            baseline = self._run_baseline(case, prepared, case_dir)
-            verdict = baseline["verdict"]
-            self._write_verdict(
-                case_dir,
-                case.case_id,
-                verdict,
-                baseline["reason"],
-                False,
-                False,
-                baseline.get("failure_category"),
-                {},
-                {},
-            )
+            with self._case_timeout_guard():
+                prepared = self._prepare_workspace(case)
+                self._write_case_artifacts(case_dir, case, prepared)
+                self._check_case_timeout(start_time)
 
-            if verdict != "baseline_ready" or self.mode == "baseline-only":
+                baseline = self._run_baseline(case, prepared, case_dir)
+                self._check_case_timeout(start_time)
+                verdict = baseline["verdict"]
+                self._write_verdict(
+                    case_dir,
+                    case.case_id,
+                    verdict,
+                    baseline["reason"],
+                    False,
+                    False,
+                    baseline.get("failure_category"),
+                    {},
+                    {},
+                )
+
+                if verdict != "baseline_ready" or self.mode == "baseline-only":
+                    self._append_trace_event(trace_path, {"type": "case_finished", "case_id": case.case_id, "verdict": verdict})
+                    return self._case_report(case, verdict, prepared.base_commit, failure_category)
+
+                self._append_trace_event(trace_path, {"type": "validation_started", "case_id": case.case_id})
+                patch_result = self._apply_and_validate(case, prepared, case_dir, trace_path)
+                self._check_case_timeout(start_time)
+                verdict = patch_result["verdict"]
+                failure_category = patch_result.get("failure_category")
                 self._append_trace_event(trace_path, {"type": "case_finished", "case_id": case.case_id, "verdict": verdict})
                 return self._case_report(case, verdict, prepared.base_commit, failure_category)
-
-            self._append_trace_event(trace_path, {"type": "validation_started", "case_id": case.case_id})
-            patch_result = self._apply_and_validate(case, prepared, case_dir, trace_path)
-            verdict = patch_result["verdict"]
-            failure_category = patch_result.get("failure_category")
-            self._append_trace_event(trace_path, {"type": "case_finished", "case_id": case.case_id, "verdict": verdict})
-            return self._case_report(case, verdict, prepared.base_commit, failure_category)
         except TimeoutError as exc:
             self._write_changed_files(case_dir, [])
             self._write_patch_diff(case_dir, "")
             self._write_verdict(
                 case_dir,
                 case.case_id,
-                "failed",
-                f"Agent execution timed out: {exc}",
+                "agent_timeout",
+                f"Case execution timed out after {self.case_timeout_seconds} seconds.",
                 False,
                 False,
                 "timeout",
                 {},
                 {},
             )
-            self._append_trace_event(trace_path, {"type": "case_finished", "case_id": case.case_id, "verdict": "failed"})
-            return self._case_report(case, "failed", prepared.base_commit if prepared else None, "timeout")
+            self._append_trace_event(trace_path, {"type": "case_finished", "case_id": case.case_id, "verdict": "agent_timeout"})
+            return self._case_report(case, "agent_timeout", prepared.base_commit if prepared else None, "timeout")
         except Exception as exc:
             self._write_changed_files(case_dir, [])
             self._write_patch_diff(case_dir, "")
@@ -606,6 +636,45 @@ class UnifiedEvalRunner:
         if valid <= 0:
             return 0.0
         return float(counts.get("resolved", 0)) / float(valid)
+
+    @contextmanager
+    def _case_timeout_guard(self):
+        if not self._supports_signal_timeout():
+            yield
+            return
+
+        def _raise_timeout(signum, frame):  # type: ignore[unused-argument]
+            raise TimeoutError("case timeout exceeded")
+
+        previous_handler = signal.getsignal(signal.SIGALRM)
+        signal.signal(signal.SIGALRM, _raise_timeout)
+        previous_timer = signal.setitimer(signal.ITIMER_REAL, self.case_timeout_seconds)
+        try:
+            yield
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous_handler)
+            if previous_timer != (0.0, 0.0):
+                signal.setitimer(signal.ITIMER_REAL, previous_timer[0], previous_timer[1])
+
+    def _supports_signal_timeout(self) -> bool:
+        return (
+            threading.current_thread() is threading.main_thread()
+            and hasattr(signal, "setitimer")
+            and hasattr(signal, "SIGALRM")
+            and hasattr(signal, "ITIMER_REAL")
+        )
+
+    def _check_case_timeout(self, start_time: float) -> None:
+        if time.monotonic() - start_time > float(self.case_timeout_seconds):
+            raise TimeoutError("case timeout exceeded")
+
+    @staticmethod
+    def _normalized_os_name() -> Optional[str]:
+        system = platform.system()
+        if system == "Darwin":
+            return "macOS"
+        return system or None
 
     def _append_trace_event(self, path: Path, event: Dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -51,6 +51,9 @@ docs/superpowers/
 # 评测结果（包含运行产物和 patch，不提交）
 eval/results/
 
+# Git worktree directories for isolated agent work
+.worktrees/
+
 # RAG 向量索引缓存（运行时生成，可重建）
 .autopatch_cache/
 

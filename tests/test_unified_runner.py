@@ -1,12 +1,75 @@
+import json
 from pathlib import Path
 import shutil
 import subprocess
 
 import pytest
 
-from eval.unified_models import UnifiedCase
 from eval.config import EvalConfig
+from eval.unified_providers import LocalSanityProvider
+from eval.unified_runner import UnifiedEvalRunner
+from eval.unified_models import UnifiedCase
 from eval.unified_preparers import LocalFixturePreparer, SWEBenchPreparer
+
+
+def test_unified_runner_baseline_only_writes_protocol_artifacts(tmp_path):
+    cases = LocalSanityProvider(
+        dataset_name="sanity-v1",
+        cases_dir=Path("eval/cases/sanity-v1"),
+    ).load()
+    selected = [case for case in cases if case.case_id == "py-single-file"]
+
+    runner = UnifiedEvalRunner(
+        cases=selected,
+        run_id="baseline-run",
+        results_dir=tmp_path,
+        mode="baseline-only",
+    )
+    report = runner.run()
+
+    case_dir = tmp_path / "baseline-run" / "cases" / "py-single-file"
+    verdict = json.loads((case_dir / "verdict.json").read_text(encoding="utf-8"))
+
+    assert report["baseline_ready"] == 1
+    assert verdict["verdict"] == "baseline_ready"
+    assert (case_dir / "case.json").exists()
+    assert (case_dir / "issue.md").exists()
+    assert (case_dir / "test-before.log").exists()
+    assert (tmp_path / "baseline-run" / "report.json").exists()
+    assert (tmp_path / "baseline-run" / "report.md").exists()
+
+
+def test_unified_runner_mock_patch_resolves_case(tmp_path):
+    cases = LocalSanityProvider(
+        dataset_name="sanity-v1",
+        cases_dir=Path("eval/cases/sanity-v1"),
+    ).load()
+    selected = [case for case in cases if case.case_id == "py-single-file"]
+
+    runner = UnifiedEvalRunner(
+        cases=selected,
+        run_id="mock-run",
+        results_dir=tmp_path,
+        mode="mock-patch",
+        mock_patch_dir=Path("eval/mock_patches/sanity-v1/resolved"),
+    )
+    report = runner.run()
+
+    case_dir = tmp_path / "mock-run" / "cases" / "py-single-file"
+    verdict = json.loads((case_dir / "verdict.json").read_text(encoding="utf-8"))
+    changed = json.loads((case_dir / "changed-files.json").read_text(encoding="utf-8"))
+
+    assert report["resolved"] == 1
+    assert verdict["verdict"] == "resolved"
+    assert changed == [
+        {
+            "path": "autopatch_demo/calculator.py",
+            "is_test": False,
+            "change_type": "modified",
+        }
+    ]
+    assert (case_dir / "patch.diff").read_text(encoding="utf-8").strip()
+    assert (case_dir / "test-after.log").exists()
 
 
 def _git_baseline(workspace: Path) -> str:

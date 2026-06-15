@@ -1,0 +1,25 @@
+{
+  "case_id": "py-single-file",
+  "source": "local_sanity",
+  "repo": "local/sanity-py-single-file",
+  "base_commit": null,
+  "base_commit_strategy": "generated_from_fixture",
+  "fixture_path": "eval/fixtures/sanity-v1/py-single-file",
+  "issue_number": null,
+  "issue_url": null,
+  "issue_title": "Percentage discounts are 100x too large",
+  "issue_body": "The calculate_discounted_total function treats a percentage like 10 as a multiplier of 10 instead of 10%. A subtotal of 200 with a 10 percent discount should return 180. Existing zero-discount behavior must continue to work.",
+  "language": "Python",
+  "difficulty": "easy",
+  "fail_to_pass": [
+    "tests/test_calculator.py::test_percentage_discount_uses_percent_units"
+  ],
+  "pass_to_pass": [
+    "tests/test_calculator.py::test_zero_discount_keeps_subtotal"
+  ],
+  "expected_files": [
+    "autopatch_demo/calculator.py"
+  ],
+  "allow_test_modifications": false,
+  "notes": "Correct fix is to divide discount_percent by 100 before multiplying subtotal."
+}

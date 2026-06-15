@@ -1,0 +1,8 @@
+diff --git a/autopatch_guard/username.py b/autopatch_guard/username.py
+--- a/autopatch_guard/username.py
++++ b/autopatch_guard/username.py
+@@ -1,3 +1,3 @@
+ def is_valid_username(value: str) -> bool:
+     """Return whether value is a supported username."""
+-    return bool(value) and all(ch.isalnum() or ch in {"_", " "} for ch in value)
++    return bool(value) and all(ch.isalnum() or ch == "_" for ch in value)

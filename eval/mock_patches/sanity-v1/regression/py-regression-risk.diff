@@ -1,0 +1,11 @@
+diff --git a/textutils/slug.py b/textutils/slug.py
+--- a/textutils/slug.py
++++ b/textutils/slug.py
+@@ -2,5 +2,5 @@ import re
+ 
+ 
+ def slugify(value: str) -> str:
+-    cleaned = re.sub(r"[^a-zA-Z0-9 ]+", "", value).strip().lower()
+-    return cleaned.replace(" ", "-")
++    cleaned = re.sub(r"\s+", " ", value).strip().lower()
++    return cleaned.replace(" ", "-")

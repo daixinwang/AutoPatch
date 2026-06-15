@@ -1,0 +1,25 @@
+{
+  "case_id": "py-regression-risk",
+  "source": "local_sanity",
+  "repo": "local/sanity-py-regression-risk",
+  "base_commit": null,
+  "base_commit_strategy": "generated_from_fixture",
+  "fixture_path": "eval/fixtures/sanity-v1/py-regression-risk",
+  "issue_number": null,
+  "issue_url": null,
+  "issue_title": "Slugify leaves repeated separators",
+  "issue_body": "The slugify function leaves repeated separators when input contains multiple spaces. 'Hello   World' should become 'hello-world'. Existing behavior must preserve words separated by punctuation, so 'Hello, World!' should still become 'hello-world'.",
+  "language": "Python",
+  "difficulty": "medium",
+  "fail_to_pass": [
+    "tests/test_slugify.py::test_slugify_collapses_repeated_spaces"
+  ],
+  "pass_to_pass": [
+    "tests/test_slugify.py::test_slugify_preserves_punctuation_separated_words"
+  ],
+  "expected_files": [
+    "textutils/slug.py"
+  ],
+  "allow_test_modifications": false,
+  "notes": "A naive fix that only replaces spaces can pass F2P while breaking punctuation behavior."
+}

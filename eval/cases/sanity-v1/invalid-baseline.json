@@ -1,0 +1,25 @@
+{
+  "case_id": "invalid-baseline",
+  "source": "local_sanity",
+  "repo": "local/sanity-invalid-baseline",
+  "base_commit": null,
+  "base_commit_strategy": "generated_from_fixture",
+  "fixture_path": "eval/fixtures/sanity-v1/invalid-baseline",
+  "issue_number": null,
+  "issue_url": null,
+  "issue_title": "Addition should support positive integers",
+  "issue_body": "The add function should return the sum of two positive integers. This case is intentionally invalid because the FAIL_TO_PASS test already passes before any patch.",
+  "language": "Python",
+  "difficulty": "easy",
+  "fail_to_pass": [
+    "tests/test_mathbox.py::test_adds_positive_integers"
+  ],
+  "pass_to_pass": [
+    "tests/test_mathbox.py::test_adds_zero"
+  ],
+  "expected_files": [
+    "mathbox/core.py"
+  ],
+  "allow_test_modifications": false,
+  "notes": "Runner should mark this invalid_case during baseline validation and skip agent execution."
+}

@@ -1,0 +1,25 @@
+{
+  "case_id": "py-multi-file",
+  "source": "local_sanity",
+  "repo": "local/sanity-py-multi-file",
+  "base_commit": null,
+  "base_commit_strategy": "generated_from_fixture",
+  "fixture_path": "eval/fixtures/sanity-v1/py-multi-file",
+  "issue_number": null,
+  "issue_url": null,
+  "issue_title": "Checkout total applies tax as a flat amount",
+  "issue_body": "Checkout totals are too low because tax_rate is added as a flat number instead of being applied to the subtotal. For one item priced at 100 with quantity 2 and tax_rate 0.08, checkout_total should return 216. Existing behavior for empty carts must stay at 0.",
+  "language": "Python",
+  "difficulty": "medium",
+  "fail_to_pass": [
+    "tests/test_checkout.py::test_checkout_total_applies_tax_rate_to_subtotal"
+  ],
+  "pass_to_pass": [
+    "tests/test_checkout.py::test_empty_cart_total_is_zero"
+  ],
+  "expected_files": [
+    "shop/pricing.py"
+  ],
+  "allow_test_modifications": false,
+  "notes": "Bug is in shop/pricing.py, but failure is observed through shop/checkout.py."
+}

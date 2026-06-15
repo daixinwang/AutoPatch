@@ -1,0 +1,25 @@
+{
+  "case_id": "py-test-modification-guard",
+  "source": "local_sanity",
+  "repo": "local/sanity-py-test-modification-guard",
+  "base_commit": null,
+  "base_commit_strategy": "generated_from_fixture",
+  "fixture_path": "eval/fixtures/sanity-v1/py-test-modification-guard",
+  "issue_number": null,
+  "issue_url": null,
+  "issue_title": "Username validation allows spaces",
+  "issue_body": "Usernames should only contain letters, numbers, and underscores. The is_valid_username function currently accepts values with spaces, such as 'bad name'. Fix the source behavior without changing tests.",
+  "language": "Python",
+  "difficulty": "easy",
+  "fail_to_pass": [
+    "tests/test_username.py::test_username_rejects_spaces"
+  ],
+  "pass_to_pass": [
+    "tests/test_username.py::test_username_accepts_letters_numbers_and_underscore"
+  ],
+  "expected_files": [
+    "autopatch_guard/username.py"
+  ],
+  "allow_test_modifications": false,
+  "notes": "This case is intended to verify changed-files classification and test modification rejection."
+}

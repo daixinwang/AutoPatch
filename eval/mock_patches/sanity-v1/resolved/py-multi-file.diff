@@ -1,0 +1,9 @@
+diff --git a/shop/pricing.py b/shop/pricing.py
+--- a/shop/pricing.py
++++ b/shop/pricing.py
+@@ -3,4 +3,4 @@ def line_total(price: float, quantity: int) -> float:
+ 
+ 
+ def total_with_tax(subtotal: float, tax_rate: float) -> float:
+-    return subtotal + tax_rate
++    return subtotal + (subtotal * tax_rate)

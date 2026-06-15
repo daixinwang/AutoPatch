@@ -59,3 +59,39 @@ def test_planner_node_accepts_list_content_blocks(monkeypatch):
     )
 
     assert result["plan"] == "### Execution Plan\n1. Fix calculator"
+
+
+def test_index_builder_node_skips_when_rag_is_disabled(monkeypatch, tmp_path):
+    from agent import graph
+    from tools.workspace import reset_workspace, set_workspace
+
+    calls = []
+
+    class _FakeChunker:
+        def chunk_directory(self, repo_path):
+            calls.append(repo_path)
+            return []
+
+    monkeypatch.setattr(graph, "AUTOPATCH_RAG_ENABLED", False, raising=False)
+    monkeypatch.setattr(graph, "_RAG_AVAILABLE", True)
+    monkeypatch.setattr("src.rag.chunker.CodeChunker", _FakeChunker)
+
+    token = set_workspace(str(tmp_path))
+    try:
+        result = graph.index_builder_node(
+            {
+                "messages": [],
+                "issue_task": "Fix calculator",
+                "repo_language": "Python",
+                "plan": "",
+                "test_output": "",
+                "review_result": "",
+                "review_retries": 0,
+                "coder_steps": 0,
+            }
+        )
+    finally:
+        reset_workspace(token)
+
+    assert result == {}
+    assert calls == []

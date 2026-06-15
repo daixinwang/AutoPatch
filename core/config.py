@@ -48,6 +48,8 @@ MAX_TOKEN_LIMIT: int      = int(os.getenv("MAX_TOKEN_LIMIT",      "60000"))
 MAX_REVIEWER_TOOL_CALLS: int = int(os.getenv("MAX_REVIEWER_TOOL_CALLS", "8"))
 
 # ── 代码 RAG 配置 ──────────────────────────────────────────
+# 是否启用代码 RAG；关闭后不会构建索引，也不会暴露 semantic_search_codebase 工具。
+AUTOPATCH_RAG_ENABLED: bool = os.getenv("AUTOPATCH_RAG_ENABLED", "true").lower() == "true"
 # Embedding 模型（OpenAI text-embedding-3-small）
 RAG_EMBEDDING_MODEL: str = os.getenv("RAG_EMBEDDING_MODEL", "text-embedding-3-small")
 # Embedding 向量维度；0 表示不显式传递 dimensions 参数。

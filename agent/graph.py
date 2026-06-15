@@ -70,6 +70,7 @@ from core.config import (
     TEST_RUNNER_MODEL_NAME,
     REVIEWER_MODEL_NAME,
     RECURSION_LIMIT,
+    AUTOPATCH_RAG_ENABLED,
 )
 
 import logging
@@ -127,7 +128,7 @@ TOOLS = [
 ]
 
 # ── 语义搜索（RAG，可选）──────────────────────
-if _RAG_AVAILABLE and _semantic_search is not None:
+if AUTOPATCH_RAG_ENABLED and _RAG_AVAILABLE and _semantic_search is not None:
     TOOLS.append(_semantic_search)
 
 # TestRunner 专属工具：只允许执行代码，不允许写文件
@@ -427,6 +428,10 @@ def index_builder_node(state: AgentState) -> dict:
     通过 ContextVar 把 CodeRetriever 实例注入后续工具调用。
     """
     logger.info("[Node: index_builder_node] 开始构建 RAG 索引...")
+
+    if not AUTOPATCH_RAG_ENABLED:
+        logger.info("[Node: index_builder_node] RAG 已关闭，跳过")
+        return {}
 
     lang = (state.get("repo_language") or "").strip()
     if lang.lower() != "python":

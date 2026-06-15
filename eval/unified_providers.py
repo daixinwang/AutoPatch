@@ -94,7 +94,7 @@ class SWEBenchProvider:
             UnifiedCase(
                 case_id=item.instance_id,
                 dataset_name="swebench-lite",
-                source="swebench",
+                source="swe_bench",
                 repo=item.repo,
                 base_commit=item.base_commit,
                 issue_title=f"SWE-bench issue {item.instance_id}",

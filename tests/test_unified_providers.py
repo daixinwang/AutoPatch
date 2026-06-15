@@ -66,6 +66,7 @@ def test_swebench_provider_loads_local_json_and_filters(tmp_path):
 
     assert [case.case_id for case in cases] == ["django__django-100"]
     assert cases[0].dataset_name == "swebench-lite"
+    assert cases[0].source == "swe_bench"
     assert cases[0].workspace_strategy == "swebench_instance"
     assert cases[0].issue_title == "SWE-bench issue django__django-100"
     assert cases[0].issue_body == "Fix query behavior."

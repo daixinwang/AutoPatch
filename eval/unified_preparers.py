@@ -4,7 +4,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Tuple
 
 from eval.config import EvalConfig
 from eval.dataset import SWEBenchInstance
@@ -13,8 +13,9 @@ from eval.unified_models import PreparedWorkspace, UnifiedCase
 
 
 class LocalFixturePreparer:
-    def __init__(self, run_dir: Path):
+    def __init__(self, run_dir: Path, project_root: Optional[Path] = None):
         self.run_dir = run_dir
+        self.project_root = project_root or Path(__file__).resolve().parents[1]
 
     def prepare(self, case: UnifiedCase) -> PreparedWorkspace:
         if case.fixture_path is None:
@@ -22,16 +23,20 @@ class LocalFixturePreparer:
 
         workspace = self.run_dir / "workspaces" / case.case_id
         if workspace.exists():
-            shutil.rmtree(workspace)
+            shutil.rmtree(workspace, ignore_errors=True)
 
         fixture_path = case.fixture_path
         if not fixture_path.is_absolute():
-            fixture_path = Path.cwd() / fixture_path
+            fixture_path = self.project_root / fixture_path
 
         shutil.copytree(fixture_path, workspace)
-
         base_commit = _init_git_baseline(workspace)
-        return PreparedWorkspace(workspace=workspace, base_commit=base_commit)
+
+        return PreparedWorkspace(
+            workspace=workspace,
+            base_commit=base_commit,
+            cleanup=lambda: shutil.rmtree(workspace, ignore_errors=True),
+        )
 
 
 class SWEBenchPreparer:
@@ -61,9 +66,15 @@ class SWEBenchPreparer:
 
         workspace = env.setup()
 
-        base_commit = _git_output(workspace, ["git", "rev-parse", "HEAD"])
+        base_commit, error = _git_output(workspace, ["git", "rev-parse", "HEAD"])
         if not base_commit:
-            base_commit = case.base_commit or ""
+            if case.base_commit:
+                base_commit = case.base_commit
+            else:
+                raise RuntimeError(
+                    "Unable to determine base commit from workspace and no case.base_commit was provided: "
+                    f"git rev-parse failed: {error or 'unknown error'}"
+                )
 
         return PreparedWorkspace(
             workspace=workspace,
@@ -86,13 +97,26 @@ def _init_git_baseline(workspace: Path) -> str:
 
     subprocess.run(["git", "init"], cwd=workspace, check=True, env=git_env, capture_output=True, text=True)
     subprocess.run(["git", "add", "."], cwd=workspace, check=True, env=git_env, capture_output=True, text=True)
-    subprocess.run(["git", "commit", "-m", "baseline"], cwd=workspace, check=True, env=git_env, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "commit", "--allow-empty", "-m", "baseline"],
+        cwd=workspace,
+        check=True,
+        env=git_env,
+        capture_output=True,
+        text=True,
+    )
 
-    return _git_output(workspace, ["git", "rev-parse", "HEAD"])
+    base_commit, error = _git_output(workspace, ["git", "rev-parse", "HEAD"])
+    if not base_commit:
+        raise RuntimeError(
+            "Failed to initialize local fixture baseline commit: "
+            f"git rev-parse failed: {error or 'unknown error'}"
+        )
+    return base_commit
 
 
-def _git_output(cwd: Path, cmd: List[str]) -> str:
+def _git_output(cwd: Path, cmd: List[str]) -> Tuple[str, str]:
     result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     if result.returncode != 0:
-        return ""
-    return result.stdout.strip()
+        return "", result.stderr.strip()
+    return result.stdout.strip(), ""

@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Dict, List, Literal, Optional, Set
 
 
 WorkspaceStrategy = Literal["local_fixture", "swebench_instance"]
@@ -32,28 +30,28 @@ class UnifiedCase:
     dataset_name: str
     source: str
     repo: str
-    base_commit: str | None
+    base_commit: Optional[str]
     issue_title: str
     issue_body: str
     language: str
-    fail_to_pass: list[str]
-    pass_to_pass: list[str]
-    expected_files: list[str] = field(default_factory=list)
+    fail_to_pass: List[str]
+    pass_to_pass: List[str]
+    expected_files: List[str] = field(default_factory=list)
     allow_test_modifications: bool = False
     workspace_strategy: WorkspaceStrategy = "local_fixture"
-    fixture_path: Path | None = None
-    swebench_instance_id: str | None = None
+    fixture_path: Optional[Path] = None
+    swebench_instance_id: Optional[str] = None
     swebench_test_patch: str = ""
     swebench_gold_patch: str = ""
-    environment_setup_commit: str | None = None
-    version: str | None = None
-    analysis_notes: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict)
+    environment_setup_commit: Optional[str] = None
+    version: Optional[str] = None
+    analysis_notes: Optional[str] = None
+    raw: Dict[str, Any] = field(default_factory=dict)
 
     def issue_markdown(self) -> str:
         return f"# {self.issue_title}\n\n{self.issue_body}\n"
 
-    def to_case_json(self) -> dict[str, Any]:
+    def to_case_json(self) -> Dict[str, Any]:
         return {
             "case_id": self.case_id,
             "dataset_name": self.dataset_name,
@@ -70,6 +68,10 @@ class UnifiedCase:
             "workspace_strategy": self.workspace_strategy,
             "fixture_path": str(self.fixture_path) if self.fixture_path else None,
             "swebench_instance_id": self.swebench_instance_id,
+            "swebench_test_patch": self.swebench_test_patch,
+            "swebench_gold_patch": self.swebench_gold_patch,
+            "analysis_notes": self.analysis_notes,
+            "raw": self.raw,
             "environment_setup_commit": self.environment_setup_commit,
             "version": self.version,
         }
@@ -79,10 +81,10 @@ class UnifiedCase:
 class PreparedWorkspace:
     workspace: Path
     base_commit: str
-    test_patch_files: set[str] = field(default_factory=set)
-    cleanup: Any | None = None
-    docker_container: str | None = None
-    docker_container_path: str | None = None
+    test_patch_files: Set[str] = field(default_factory=set)
+    cleanup: Optional[Any] = None
+    docker_container: Optional[str] = None
+    docker_container_path: Optional[str] = None
 
 
 def is_test_path(path: str) -> bool:

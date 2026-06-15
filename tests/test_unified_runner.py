@@ -29,9 +29,31 @@ def test_unified_runner_baseline_only_writes_protocol_artifacts(tmp_path):
 
     case_dir = tmp_path / "baseline-run" / "cases" / "py-single-file"
     verdict = json.loads((case_dir / "verdict.json").read_text(encoding="utf-8"))
+    report_json = json.loads((tmp_path / "baseline-run" / "report.json").read_text(encoding="utf-8"))
+    config = json.loads((tmp_path / "baseline-run" / "config.json").read_text(encoding="utf-8"))
 
     assert report["baseline_ready"] == 1
+    assert report_json["resolved_rate_all"] == 0.0
+    assert report_json["resolved_rate_valid"] == 0.0
     assert verdict["verdict"] == "baseline_ready"
+    assert config["protocol_version"] == "2026-06-14"
+    assert config["run_id"] == "baseline-run"
+    assert "autopatch_commit" in config
+    assert "autopatch_dirty" in config
+    assert config["dataset_name"] == "sanity-v1"
+    assert config["dataset_version"] == "2026-06-14"
+    assert config["case_ids"] == ["py-single-file"]
+    assert config["agent_config"] == {
+        "mode": "baseline-only",
+        "rag_enabled": None,
+        "reviewer_enabled": None,
+    }
+    assert config["environment"] == {
+        "python_version": config["environment"]["python_version"],
+        "docker_enabled": False,
+    }
+    assert config["timeouts"]["test_seconds"] == 15
+    assert config["timeouts"]["case_seconds"] == 30
     assert (case_dir / "case.json").exists()
     assert (case_dir / "issue.md").exists()
     assert (case_dir / "test-before.log").exists()
@@ -70,6 +92,103 @@ def test_unified_runner_mock_patch_resolves_case(tmp_path):
     ]
     assert (case_dir / "patch.diff").read_text(encoding="utf-8").strip()
     assert (case_dir / "test-after.log").exists()
+
+
+def test_unified_runner_agent_failure_is_failed(tmp_path, monkeypatch):
+    cases = LocalSanityProvider(
+        dataset_name="sanity-v1",
+        cases_dir=Path("eval/cases/sanity-v1"),
+    ).load()
+    selected = [case for case in cases if case.case_id == "py-single-file"]
+
+    import autopatch
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("agent exploded")
+
+    monkeypatch.setattr(autopatch, "run_agent_on_issue", boom)
+
+    runner = UnifiedEvalRunner(
+        cases=selected,
+        run_id="agent-failure",
+        results_dir=tmp_path,
+        mode="agent",
+    )
+    report = runner.run()
+
+    case_dir = tmp_path / "agent-failure" / "cases" / "py-single-file"
+    verdict = json.loads((case_dir / "verdict.json").read_text(encoding="utf-8"))
+
+    assert report["failed"] == 1
+    assert report["infra_error"] == 0
+    assert verdict["verdict"] == "failed"
+    assert verdict["failure_category"] == "tool_failure"
+    assert verdict["patch_applies"] is False
+    assert verdict["modified_test_files"] is False
+    assert report["cases"][0]["verdict"] == "failed"
+
+
+def test_unified_runner_timeout_failure_category_uses_protocol_value(tmp_path, monkeypatch):
+    cases = LocalSanityProvider(
+        dataset_name="sanity-v1",
+        cases_dir=Path("eval/cases/sanity-v1"),
+    ).load()
+    selected = [case for case in cases if case.case_id == "py-single-file"]
+
+    runner = UnifiedEvalRunner(
+        cases=selected,
+        run_id="timeout-run",
+        results_dir=tmp_path,
+        mode="agent",
+        eval_config=EvalConfig(timeout_per_instance=2),
+    )
+
+    import autopatch
+
+    def fake_agent(*args, **kwargs):
+        workspace = tmp_path / "timeout-run" / "workspaces" / "py-single-file"
+        file_path = workspace / "autopatch_demo" / "calculator.py"
+        original = file_path.read_text(encoding="utf-8")
+        file_path.write_text(original.replace("discount_percent", "discount_percent / 100"), encoding="utf-8")
+        return {"review_result": "", "step_count": 0}
+
+    monkeypatch.setattr(autopatch, "run_agent_on_issue", fake_agent)
+
+    calls = {"count": 0}
+
+    def fake_run_selectors(workspace, selectors):
+        calls["count"] += 1
+        if calls["count"] <= 2:
+            return {
+                selector: {
+                    "passed": selector.endswith("zero_discount_keeps_subtotal"),
+                    "returncode": 0 if selector.endswith("zero_discount_keeps_subtotal") else 1,
+                    "stdout": "",
+                    "stderr": "",
+                    "timed_out": False,
+                }
+                for selector in selectors
+            }
+        return {
+            selector: {
+                "passed": False,
+                "returncode": -1,
+                "stdout": "",
+                "stderr": "",
+                "timed_out": True,
+            }
+            for selector in selectors
+        }
+
+    monkeypatch.setattr(runner, "_run_selectors", fake_run_selectors)
+
+    report = runner.run()
+    case_dir = tmp_path / "timeout-run" / "cases" / "py-single-file"
+    verdict = json.loads((case_dir / "verdict.json").read_text(encoding="utf-8"))
+
+    assert report["failed"] == 1
+    assert report["infra_error"] == 0
+    assert verdict["failure_category"] == "timeout"
 
 
 def _git_baseline(workspace: Path) -> str:

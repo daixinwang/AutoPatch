@@ -32,9 +32,11 @@ class UnifiedEvalRunner:
         self.results_dir = Path(results_dir)
         self.mode = mode
         self.mock_patch_dir = mock_patch_dir
-        self.eval_config = eval_config or EvalConfig(results_dir=str(self.results_dir))
+        self.eval_config = eval_config or EvalConfig(results_dir=str(self.results_dir), timeout_per_instance=30)
         self.project_root = Path(__file__).resolve().parents[1]
         self.run_dir = self.results_dir / self.run_id
+        self.selector_timeout_seconds = max(1, self.eval_config.timeout_per_instance // 2)
+        self.case_timeout_seconds = max(1, self.eval_config.timeout_per_instance)
         self.run_dir.mkdir(parents=True, exist_ok=True)
 
     def run(self) -> Dict[str, Any]:
@@ -55,7 +57,7 @@ class UnifiedEvalRunner:
             counts[outcome["verdict"]] = counts.get(outcome["verdict"], 0) + 1
 
         report: Dict[str, Any] = {
-            "protocol_version": "2026-06-15",
+            "protocol_version": "2026-06-14",
             "run_id": self.run_id,
             "dataset_name": self.cases[0].dataset_name if self.cases else None,
             "mode": self.mode,
@@ -67,28 +69,38 @@ class UnifiedEvalRunner:
             "agent_timeout": counts["agent_timeout"],
             "invalid_case": counts["invalid_case"],
             "infra_error": counts["infra_error"],
+            "resolved_rate_all": self._resolved_rate_all(counts),
+            "resolved_rate_valid": self._resolved_rate_valid(counts),
             "cases": case_reports,
         }
 
+        autopatch_commit = self._git_output(self.project_root, ["git", "rev-parse", "HEAD"]) or None
+        autopatch_dirty = bool(self._git_output(self.project_root, ["git", "status", "--short"]))
         config = {
-            "protocol_version": "2026-06-15",
+            "protocol_version": "2026-06-14",
             "run_id": self.run_id,
             "dataset_name": self.cases[0].dataset_name if self.cases else None,
+            "dataset_version": "2026-06-14",
+            "autopatch_commit": autopatch_commit,
+            "autopatch_dirty": autopatch_dirty,
             "mode": self.mode,
             "case_ids": [case.case_id for case in self.cases],
-            "mock_patch_dir": str(self.mock_patch_dir) if self.mock_patch_dir else None,
-            "eval_config": {
-                "dataset_name": self.eval_config.dataset_name,
-                "dataset_split": self.eval_config.dataset_split,
-                "use_docker": self.eval_config.use_docker,
-                "timeout_per_instance": self.eval_config.timeout_per_instance,
-                "results_dir": self.eval_config.results_dir,
+            "agent_config": {
+                "mode": self.mode,
+                "rag_enabled": None,
+                "reviewer_enabled": None,
             },
             "environment": {
                 "python_version": sys.version.split()[0],
-                "python_executable": sys.executable,
+                "docker_enabled": self.eval_config.use_docker,
+            },
+            "timeouts": {
+                "test_seconds": self.selector_timeout_seconds,
+                "case_seconds": self.case_timeout_seconds,
             },
         }
+        if self.mock_patch_dir is not None:
+            config["mock_patch_dir"] = str(self.mock_patch_dir)
 
         self._write_json(self.run_dir / "config.json", config)
         self._write_json(self.run_dir / "report.json", report)
@@ -109,7 +121,17 @@ class UnifiedEvalRunner:
             self._write_case_artifacts(case_dir, case, prepared)
             baseline = self._run_baseline(case, prepared, case_dir)
             verdict = baseline["verdict"]
-            self._write_verdict(case_dir, case.case_id, verdict, baseline["reason"], False, False, None, {}, {})
+            self._write_verdict(
+                case_dir,
+                case.case_id,
+                verdict,
+                baseline["reason"],
+                False,
+                False,
+                baseline.get("failure_category"),
+                {},
+                {},
+            )
 
             if verdict != "baseline_ready" or self.mode == "baseline-only":
                 self._append_trace_event(trace_path, {"type": "case_finished", "case_id": case.case_id, "verdict": verdict})
@@ -127,16 +149,16 @@ class UnifiedEvalRunner:
             self._write_verdict(
                 case_dir,
                 case.case_id,
-                "agent_timeout",
+                "failed",
                 f"Agent execution timed out: {exc}",
                 False,
                 False,
-                "tool_timeout",
+                "timeout",
                 {},
                 {},
             )
-            self._append_trace_event(trace_path, {"type": "case_finished", "case_id": case.case_id, "verdict": "agent_timeout"})
-            return self._case_report(case, "agent_timeout", prepared.base_commit if prepared else None, "tool_timeout")
+            self._append_trace_event(trace_path, {"type": "case_finished", "case_id": case.case_id, "verdict": "failed"})
+            return self._case_report(case, "failed", prepared.base_commit if prepared else None, "timeout")
         except Exception as exc:
             self._write_changed_files(case_dir, [])
             self._write_patch_diff(case_dir, "")
@@ -184,6 +206,7 @@ class UnifiedEvalRunner:
             return {
                 "verdict": "infra_error",
                 "reason": "Baseline test execution timed out.",
+                "failure_category": "timeout",
             }
 
         if any(item["passed"] for item in f2p.values()):
@@ -224,10 +247,37 @@ class UnifiedEvalRunner:
             )
         except TimeoutError:
             self._append_trace_event(trace_path, {"type": "agent_finished", "case_id": case.case_id, "status": "timeout"})
-            raise
+            self._write_changed_files(case_dir, [])
+            self._write_patch_diff(case_dir, "")
+            self._write_verdict(
+                case_dir,
+                case.case_id,
+                "failed",
+                "Agent execution timed out.",
+                False,
+                False,
+                "timeout",
+                {},
+                {},
+            )
+            return {"verdict": "failed", "failure_category": "timeout"}
         except Exception as exc:
             self._append_trace_event(trace_path, {"type": "agent_failed", "case_id": case.case_id, "error": str(exc)})
-            raise
+            self._write_changed_files(case_dir, [])
+            self._write_patch_diff(case_dir, "")
+            self._write_verdict(
+                case_dir,
+                case.case_id,
+                "failed",
+                f"Agent execution failed: {type(exc).__name__}: {exc}",
+                False,
+                False,
+                "tool_failure",
+                {},
+                {},
+            )
+            self._append_trace_event(trace_path, {"type": "case_finished", "case_id": case.case_id, "verdict": "failed"})
+            return {"verdict": "failed", "failure_category": "tool_failure"}
 
         self._append_trace_event(trace_path, {"type": "agent_finished", "case_id": case.case_id, "status": "ok"})
         return self._validate_patch(case, prepared, case_dir)
@@ -329,11 +379,11 @@ class UnifiedEvalRunner:
                 "Patch validation timed out.",
                 True,
                 False,
-                "tool_timeout",
+                "timeout",
                 f2p,
                 p2p,
             )
-            return {"verdict": "failed", "failure_category": "tool_timeout"}
+            return {"verdict": "failed", "failure_category": "timeout"}
 
         f2p_failed = [test_id for test_id, data in f2p.items() if not data["passed"]]
         p2p_failed = [test_id for test_id, data in p2p.items() if not data["passed"]]
@@ -373,7 +423,7 @@ class UnifiedEvalRunner:
                     cwd=workspace,
                     capture_output=True,
                     text=True,
-                    timeout=120,
+                    timeout=self.selector_timeout_seconds,
                 )
                 results[selector] = {
                     "passed": result.returncode == 0,
@@ -538,6 +588,24 @@ class UnifiedEvalRunner:
         if self.mock_patch_dir.is_absolute():
             return self.mock_patch_dir
         return self.project_root / self.mock_patch_dir
+
+    def _git_output(self, cwd: Path, cmd: List[str]) -> str:
+        result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+        if result.returncode != 0:
+            return ""
+        return result.stdout.strip()
+
+    def _resolved_rate_all(self, counts: Dict[str, int]) -> float:
+        total = len(self.cases)
+        if total == 0:
+            return 0.0
+        return float(counts.get("resolved", 0)) / float(total)
+
+    def _resolved_rate_valid(self, counts: Dict[str, int]) -> float:
+        valid = len(self.cases) - counts.get("invalid_case", 0) - counts.get("infra_error", 0)
+        if valid <= 0:
+            return 0.0
+        return float(counts.get("resolved", 0)) / float(valid)
 
     def _append_trace_event(self, path: Path, event: Dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

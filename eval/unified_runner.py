@@ -229,8 +229,8 @@ class UnifiedEvalRunner:
         prepared: PreparedWorkspace,
         case_dir: Path,
     ) -> Dict[str, Any]:
-        f2p = self._run_selectors(prepared.workspace, case.fail_to_pass)
-        p2p = self._run_selectors(prepared.workspace, case.pass_to_pass)
+        f2p = self._run_selectors(prepared, case.fail_to_pass)
+        p2p = self._run_selectors(prepared, case.pass_to_pass)
         self._write_test_log(case_dir / "test-before.log", "Baseline Validation", f2p, p2p)
 
         if any(item["timed_out"] for item in f2p.values()) or any(item["timed_out"] for item in p2p.values()):
@@ -400,8 +400,8 @@ class UnifiedEvalRunner:
             )
             return {"verdict": "failed", "failure_category": "test_modification"}
 
-        f2p = self._run_selectors(prepared.workspace, case.fail_to_pass)
-        p2p = self._run_selectors(prepared.workspace, case.pass_to_pass)
+        f2p = self._run_selectors(prepared, case.fail_to_pass)
+        p2p = self._run_selectors(prepared, case.pass_to_pass)
         self._write_test_log(case_dir / "test-after.log", "Patch Validation", f2p, p2p)
 
         if any(item["timed_out"] for item in f2p.values()) or any(item["timed_out"] for item in p2p.values()):
@@ -447,13 +447,34 @@ class UnifiedEvalRunner:
         )
         return {"verdict": verdict, "failure_category": failure_category}
 
-    def _run_selectors(self, workspace: Path, selectors: List[str]) -> Dict[str, Dict[str, Any]]:
+    def _run_selectors(self, prepared: PreparedWorkspace, selectors: List[str]) -> Dict[str, Dict[str, Any]]:
+        if prepared.docker_container:
+            from eval.verify import run_tests_docker
+
+            docker_results = run_tests_docker(
+                selectors,
+                prepared.docker_container,
+                str(prepared.workspace),
+                timeout=self.selector_timeout_seconds,
+                container_path=prepared.docker_container_path or "/testbed",
+            )
+            return {
+                selector: {
+                    "passed": docker_results.get(selector, False),
+                    "returncode": 0 if docker_results.get(selector, False) else 1,
+                    "stdout": "",
+                    "stderr": "",
+                    "timed_out": False,
+                }
+                for selector in selectors
+            }
+
         results: Dict[str, Dict[str, Any]] = {}
         for selector in selectors:
             try:
                 result = subprocess.run(
                     [sys.executable, "-m", "pytest", "-q", selector],
-                    cwd=workspace,
+                    cwd=prepared.workspace,
                     capture_output=True,
                     text=True,
                     timeout=self.selector_timeout_seconds,

@@ -8,7 +8,7 @@ import pytest
 from eval.config import EvalConfig
 from eval.unified_providers import LocalSanityProvider
 from eval.unified_runner import UnifiedEvalRunner
-from eval.unified_models import UnifiedCase
+from eval.unified_models import PreparedWorkspace, UnifiedCase
 from eval.unified_preparers import LocalFixturePreparer, SWEBenchPreparer
 
 
@@ -262,6 +262,61 @@ def test_unified_runner_timeout_failure_category_uses_protocol_value(tmp_path, m
     assert report["infra_error"] == 0
     assert verdict["failure_category"] == "timeout"
     assert "tool_timeout" not in (case_dir / "verdict.json").read_text(encoding="utf-8")
+
+
+def test_unified_runner_uses_docker_for_selectors_when_container_is_available(tmp_path, monkeypatch):
+    calls = []
+
+    def fail_local_pytest(*args, **kwargs):
+        raise AssertionError("local pytest should not run for docker workspaces")
+
+    def fake_run_tests_docker(test_ids, container_name, workspace, repo="", timeout=300, container_path="/testbed"):
+        calls.append(
+            {
+                "test_ids": test_ids,
+                "container_name": container_name,
+                "workspace": workspace,
+                "repo": repo,
+                "timeout": timeout,
+                "container_path": container_path,
+            }
+        )
+        return {test_id: True for test_id in test_ids}
+
+    monkeypatch.setattr(subprocess, "run", fail_local_pytest)
+    monkeypatch.setattr("eval.verify.run_tests_docker", fake_run_tests_docker)
+
+    runner = UnifiedEvalRunner(
+        cases=[],
+        run_id="docker-selectors",
+        results_dir=tmp_path,
+        mode="baseline-only",
+        eval_config=EvalConfig(timeout_per_instance=123),
+    )
+    prepared = PreparedWorkspace(
+        workspace=tmp_path / "workspace",
+        base_commit="abc123",
+        docker_container="fake-container",
+        docker_container_path="/repo",
+    )
+
+    results = runner._run_selectors(prepared, ["tests/test_fake.py::test_ok"])
+
+    assert calls == [
+        {
+            "test_ids": ["tests/test_fake.py::test_ok"],
+            "container_name": "fake-container",
+            "workspace": str(tmp_path / "workspace"),
+            "repo": "",
+            "timeout": runner.selector_timeout_seconds,
+            "container_path": "/repo",
+        }
+    ]
+    assert results["tests/test_fake.py::test_ok"]["passed"] is True
+    assert results["tests/test_fake.py::test_ok"]["returncode"] == 0
+    assert results["tests/test_fake.py::test_ok"]["stdout"] == ""
+    assert results["tests/test_fake.py::test_ok"]["stderr"] == ""
+    assert results["tests/test_fake.py::test_ok"]["timed_out"] is False
 
 
 def _git_baseline(workspace: Path) -> str:

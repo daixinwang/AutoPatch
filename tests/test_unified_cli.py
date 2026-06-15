@@ -1,5 +1,8 @@
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -115,3 +118,29 @@ def test_resolve_cases_swebench_smoke_uses_lite_dataset(monkeypatch):
     assert captured["seed"] == 7
     assert captured["max_instances"] is None
     assert cases == []
+
+
+def test_unified_cli_loads_dotenv_before_core_config(tmp_path):
+    (tmp_path / ".env").write_text(
+        "PLANNER_MODEL_NAME=dotenv-planner-test\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path.cwd())
+    env.pop("PLANNER_MODEL_NAME", None)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import eval.unified; import core.config as c; print(c.PLANNER_MODEL_NAME)",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "dotenv-planner-test"

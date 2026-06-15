@@ -12,6 +12,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
+from dotenv import load_dotenv
+
+# Load .env before importing modules that read core.config constants.
+load_dotenv()
+
 from eval.config import EvalConfig
 from eval.unified_providers import (
     LocalSanityProvider,

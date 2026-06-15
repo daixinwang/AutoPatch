@@ -68,6 +68,28 @@ def test_unified_runner_baseline_only_writes_protocol_artifacts(tmp_path):
     assert (tmp_path / "baseline-run" / "report.md").exists()
 
 
+def test_unified_runner_baseline_failure_category_is_preserved_in_report(tmp_path):
+    cases = LocalSanityProvider(
+        dataset_name="sanity-v1",
+        cases_dir=Path("eval/cases/sanity-v1"),
+    ).load()
+    selected = [case for case in cases if case.case_id == "invalid-baseline"]
+
+    runner = UnifiedEvalRunner(
+        cases=selected,
+        run_id="invalid-baseline-run",
+        results_dir=tmp_path,
+        mode="baseline-only",
+    )
+    report = runner.run()
+
+    case_dir = tmp_path / "invalid-baseline-run" / "cases" / "invalid-baseline"
+    verdict = json.loads((case_dir / "verdict.json").read_text(encoding="utf-8"))
+
+    assert report["cases"][0]["failure_category"] == verdict["failure_category"]
+    assert report["cases"][0]["failure_category"] == "invalid_case"
+
+
 def test_unified_runner_mock_patch_resolves_case(tmp_path):
     cases = LocalSanityProvider(
         dataset_name="sanity-v1",

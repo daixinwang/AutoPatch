@@ -150,6 +150,7 @@ class UnifiedEvalRunner:
                 baseline = self._run_baseline(case, prepared, case_dir)
                 self._check_case_timeout(start_time)
                 verdict = baseline["verdict"]
+                failure_category = baseline.get("failure_category")
                 self._write_verdict(
                     case_dir,
                     case.case_id,
@@ -243,12 +244,14 @@ class UnifiedEvalRunner:
             return {
                 "verdict": "invalid_case",
                 "reason": "FAIL_TO_PASS tests already pass before any patch; case metadata or baseline is invalid.",
+                "failure_category": "invalid_case",
             }
 
         if any(not item["passed"] for item in p2p.values()):
             return {
                 "verdict": "infra_error",
                 "reason": "PASS_TO_PASS tests fail before any patch; baseline environment is not valid.",
+                "failure_category": "infra_error",
             }
 
         return {

@@ -24,7 +24,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY *.py ./
 COPY agent/ ./agent/
 COPY core/ ./core/
-COPY src/ ./src/
 COPY tools/ ./tools/
 COPY eval/ ./eval/
 

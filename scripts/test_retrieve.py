@@ -22,9 +22,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.rag.chunker import CodeChunker
-from src.rag.indexer import CodeIndexer
-from src.rag.retriever import CodeRetriever
+from core.rag.chunker import CodeChunker
+from core.rag.indexer import CodeIndexer
+from core.rag.retriever import CodeRetriever
 import openai
 from core.config import (
     RAG_EMBEDDING_MODEL,

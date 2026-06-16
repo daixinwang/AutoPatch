@@ -1,6 +1,6 @@
 """
-src/tools/search_codebase_semantic.py
---------------------------------------
+tools/search_codebase_semantic.py
+---------------------------------
 语义代码搜索 LangChain 工具（@tool 装饰器封装）。
 工具名：semantic_search_codebase
 """

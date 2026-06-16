@@ -93,7 +93,7 @@ def resolve_workspace_path(path_str: str) -> Path:
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from src.rag.retriever import CodeRetriever
+    from core.rag.retriever import CodeRetriever
 
 _retriever: ContextVar[Optional["CodeRetriever"]] = ContextVar(
     "_retriever", default=None

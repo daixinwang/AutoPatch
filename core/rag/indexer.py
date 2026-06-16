@@ -1,6 +1,6 @@
 """
-src/rag/indexer.py
-------------------
+core/rag/indexer.py
+-------------------
 ChromaDB 向量索引构建器。
 
 存储路径：{RAG_CACHE_DIR}/rag_index/{repo_hash}/
@@ -16,7 +16,7 @@ from typing import Optional
 import chromadb
 from chromadb.config import Settings
 
-from src.rag.chunker import CodeChunk
+from core.rag.chunker import CodeChunk
 from core.config import (
     RAG_CACHE_DIR,
     RAG_EMBEDDING_MODEL,

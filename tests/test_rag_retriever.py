@@ -2,8 +2,8 @@
 import pytest
 from unittest.mock import MagicMock
 
-from src.rag.chunker import CodeChunk
-from src.rag.retriever import CodeRetriever, _rrf_fuse, _tokenize
+from core.rag.chunker import CodeChunk
+from core.rag.retriever import CodeRetriever, _rrf_fuse, _tokenize
 
 
 # ── 工具函数单元测试 ───────────────────────────────────────────
@@ -65,7 +65,7 @@ def sample_chunks():
 
 @pytest.fixture
 def mock_collection(sample_chunks):
-    from src.rag.indexer import chunk_id
+    from core.rag.indexer import chunk_id
     coll = MagicMock()
     coll.query.return_value = {
         "ids": [[chunk_id(sample_chunks[0])]],

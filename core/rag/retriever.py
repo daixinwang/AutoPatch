@@ -1,6 +1,6 @@
 """
-src/rag/retriever.py
---------------------
+core/rag/retriever.py
+---------------------
 混合检索器：向量（ChromaDB）+ BM25 + RRF 融合。
 
 RRF: score(d) = Σ 1 / (k + rank_i(d))，k=60
@@ -13,8 +13,8 @@ from typing import Optional
 
 from rank_bm25 import BM25Okapi
 
-from src.rag.chunker import CodeChunk
-from src.rag.indexer import chunk_id
+from core.rag.chunker import CodeChunk
+from core.rag.indexer import chunk_id
 
 logger = logging.getLogger(__name__)
 

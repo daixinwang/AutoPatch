@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from src.rag.chunker import CodeChunk, CodeChunker
+from core.rag.chunker import CodeChunk, CodeChunker
 
 
 @pytest.fixture

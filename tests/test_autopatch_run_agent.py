@@ -74,7 +74,7 @@ def test_index_builder_node_skips_when_rag_is_disabled(monkeypatch, tmp_path):
 
     monkeypatch.setattr(graph, "AUTOPATCH_RAG_ENABLED", False, raising=False)
     monkeypatch.setattr(graph, "_RAG_AVAILABLE", True)
-    monkeypatch.setattr("src.rag.chunker.CodeChunker", _FakeChunker)
+    monkeypatch.setattr("core.rag.chunker.CodeChunker", _FakeChunker)
 
     token = set_workspace(str(tmp_path))
     try:

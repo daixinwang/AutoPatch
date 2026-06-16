@@ -1,8 +1,8 @@
 """tests/test_rag_indexer.py"""
 from unittest.mock import MagicMock
 
-from src.rag.chunker import CodeChunk
-from src.rag.indexer import CodeIndexer, _chunk_to_text, _embed_with_retry
+from core.rag.chunker import CodeChunk
+from core.rag.indexer import CodeIndexer, _chunk_to_text, _embed_with_retry
 
 
 def test_embed_with_retry_passes_embedding_dimensions():
@@ -44,7 +44,7 @@ def test_indexer_batches_embeddings_at_provider_limit(monkeypatch, tmp_path):
         return [[0.0, 0.1, 0.2] for _ in texts]
 
     monkeypatch.setattr(CodeIndexer, "__init__", lambda self, repo_path, cache_dir=None: None)
-    monkeypatch.setattr("src.rag.indexer._embed_with_retry", fake_embed)
+    monkeypatch.setattr("core.rag.indexer._embed_with_retry", fake_embed)
 
     indexer = CodeIndexer(str(tmp_path))
     indexer._collection = FakeCollection()

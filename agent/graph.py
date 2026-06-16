@@ -52,7 +52,7 @@ from tools.execute_tools import run_pytest, run_python_script, run_test_command,
 
 # RAG 语义检索工具（可选，未安装时降级）
 try:
-    from src.tools.search_codebase_semantic import semantic_search_codebase as _semantic_search
+    from tools.search_codebase_semantic import semantic_search_codebase as _semantic_search
     _RAG_AVAILABLE = True
 except Exception:
     _RAG_AVAILABLE = False
@@ -445,9 +445,9 @@ def index_builder_node(state: AgentState) -> dict:
     try:
         import openai
         from pathlib import Path
-        from src.rag.chunker import CodeChunker
-        from src.rag.indexer import CodeIndexer
-        from src.rag.retriever import CodeRetriever
+        from core.rag.chunker import CodeChunker
+        from core.rag.indexer import CodeIndexer
+        from core.rag.retriever import CodeRetriever
         from tools.workspace import get_workspace, set_retriever
         from core.config import (
             RAG_EMBEDDING_MODEL,

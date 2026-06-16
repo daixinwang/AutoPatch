@@ -1,6 +1,6 @@
 """
-src/rag/chunker.py
-------------------
+core/rag/chunker.py
+-------------------
 AST 级 Python 代码切分器。
 
 将 .py 文件解析为 CodeChunk 列表，粒度为函数/类/方法/模块级代码。

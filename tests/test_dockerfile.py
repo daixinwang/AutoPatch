@@ -10,4 +10,4 @@ def test_dockerfile_copies_runtime_packages():
     dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
 
     assert "COPY core/ ./core/" in dockerfile
-    assert "COPY src/ ./src/" in dockerfile
+    assert "COPY src/ ./src/" not in dockerfile

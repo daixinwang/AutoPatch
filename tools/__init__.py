@@ -7,6 +7,7 @@ from tools.search_tools import (
     list_directory,
     search_codebase,
 )
+from tools.search_codebase_semantic import semantic_search_codebase
 from tools.execute_tools import run_pytest, run_python_script
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "search_codebase",
     "find_definition",
     "grep_in_file",
+    "semantic_search_codebase",
     # 代码执行
     "run_pytest",
     "run_python_script",

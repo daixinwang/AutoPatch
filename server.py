@@ -36,7 +36,6 @@ SSE 事件格式（每条 JSON）：
 
 import asyncio
 import contextvars
-import json
 import os
 import shutil
 import subprocess
@@ -50,17 +49,20 @@ import requests
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
 import logging
 
+from api.auth import verify_api_key
+from api.diff_service import generate_and_save_diff
+from api.events import log_event, node_event, result_event, sse_event, task_event, token_event
+from api.git_ops import git_apply_and_push
+from api.models import ApplyRequest, PatchRequest, PreviewResponse, ResumeRequest
 from core.logging_config import setup_logging
 
 from core.github_client import GitHubClient, RepoWorkspace, parse_github_url
-from core.diff_generator import generate_diff, get_changed_files, write_diff_file
 from agent.graph import build_graph, AgentState
 from langchain_core.messages import HumanMessage
 from tools.workspace import set_workspace, reset_workspace
@@ -150,22 +152,6 @@ fastapi_app.add_middleware(
 _MAX_CONCURRENT = _CFG_MAX_CONCURRENT
 _pipeline_semaphore = asyncio.Semaphore(_MAX_CONCURRENT)
 
-# ── API 认证 ──────────────────────────────────────────────
-# 设置 AUTOPATCH_API_KEY 环境变量启用 Bearer token 认证。
-# 未设置时允许所有请求（开发模式），启动时打印警告。
-_API_KEY = os.getenv("AUTOPATCH_API_KEY", "")
-if not _API_KEY:
-    logger.warning("AUTOPATCH_API_KEY 未设置，API 端点无认证保护（仅限开发环境）")
-
-
-async def _verify_api_key(request: Request) -> None:
-    """FastAPI 依赖：校验 Authorization: Bearer <key>。"""
-    if not _API_KEY:
-        return  # 未配置 API Key，跳过认证（开发模式）
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer ") or auth[7:] != _API_KEY:
-        raise HTTPException(status_code=401, detail="未授权：无效的 API Key")
-
 # ── 全局有状态对象（在 startup 中初始化）────────────────────
 # agent_app: 带 PostgresSaver checkpointer 的 LangGraph 实例
 # task_store: 任务元数据持久化（tasks/*.json）
@@ -199,36 +185,6 @@ async def _release_resume_lock(task_id: str) -> None:
 
 
 
-# ── 请求体定义 ────────────────────────────────────────────
-class PatchRequest(BaseModel):
-    repoUrl:     str   # e.g. "owner/repo" or full https URL
-    issueNumber: int   # e.g. 42
-
-
-class ResumeRequest(BaseModel):
-    taskId: str        # 中断任务的 UUID（由 /api/patch 的 task 事件提供）
-
-
-class ApplyRequest(BaseModel):
-    repoUrl:     str
-    issueNumber: int
-    diffContent: str
-
-
-class PreviewResponse(BaseModel):
-    issueTitle:      str
-    issueBody:       str
-    issueState:      str       # "open" | "closed"
-    issueLabels:     list[str]
-    commentCount:    int
-    issueUrl:        str
-    repoLanguage:    str
-    repoStars:       int
-    repoPrivate:     bool
-    repoDescription: str
-    defaultBranch:   str
-
-
 # ── 节点名 → 前端 ID 映射 ─────────────────────────────────
 NODE_ID_MAP = {
     "planner_node":     "planner",
@@ -237,39 +193,6 @@ NODE_ID_MAP = {
     "test_runner_node": "testrunner",
     "reviewer_node":    "reviewer",
 }
-
-# ── SSE 事件构造工具 ──────────────────────────────────────
-
-def sse_event(data: dict) -> str:
-    """将字典序列化为 SSE data 行格式。"""
-    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-
-def log_event(message: str, level: str = "info", node: Optional[str] = None) -> str:
-    return sse_event({"type": "log", "level": level, "node": node, "message": message})
-
-
-def node_event(node_id: str, status: str, detail: str = "") -> str:
-    return sse_event({"type": "node", "node": node_id, "status": status, "detail": detail})
-
-
-def token_event(node_id: str, content: str) -> str:
-    return sse_event({"type": "token", "node": node_id, "content": content})
-
-
-def task_event(task_id: str, status: str) -> str:
-    return sse_event({"type": "task", "taskId": task_id, "status": status})
-
-
-def result_event(diff: str, review_result: str, step_count: int, changed_files: list) -> str:
-    return sse_event({
-        "type":          "result",
-        "diff":          diff,
-        "reviewResult":  review_result,
-        "stepCount":     step_count,
-        "changedFiles":  changed_files,
-    })
-
 
 # ── 核心流水线（异步生成器）────────────────────────────────
 
@@ -405,131 +328,6 @@ async def _consume_agent_stream(
         await asyncio.sleep(0)
 
 
-def _git_apply_and_push(
-    repo_path,
-    branch: str,
-    diff_content: str,
-    repo_info,
-    token: str,
-) -> None:
-    """
-    在本地 git 仓库中应用 diff，创建分支，commit，并 push 到 GitHub。
-
-    同步函数，在 asyncio executor 中调用。
-
-    Args:
-        repo_path:    本地 git 仓库路径（Path 或 str）
-        branch:       新分支名（如 "autopatch/issue-42"）
-        diff_content: unified diff 字符串
-        repo_info:    RepoInfo（含 owner/repo）
-        token:        GitHub Personal Access Token（需 contents:write + pull-requests:write）
-
-    Raises:
-        subprocess.CalledProcessError: git 命令非零退出（如 apply 冲突、push 失败）
-    """
-    cwd = str(repo_path)
-
-    # 1. 创建新分支
-    subprocess.run(
-        ["git", "checkout", "-b", branch],
-        cwd=cwd, check=True, capture_output=True, text=True,
-    )
-
-    # 2. 将 diff 写入临时文件并 apply
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".diff", delete=False, encoding="utf-8"
-    ) as f:
-        f.write(diff_content)
-        diff_file = f.name
-
-    try:
-        subprocess.run(
-            ["git", "apply", "--whitespace=fix", diff_file],
-            cwd=cwd, check=True, capture_output=True, text=True,
-        )
-    finally:
-        Path(diff_file).unlink(missing_ok=True)
-
-    # 3. 配置 git 用户（临时，仅本 repo）
-    subprocess.run(
-        ["git", "config", "user.email", "autopatch@bot.local"],
-        cwd=cwd, check=True, capture_output=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "AutoPatch"],
-        cwd=cwd, check=True, capture_output=True,
-    )
-
-    # 4. Commit
-    subprocess.run(["git", "add", "-A"], cwd=cwd, check=True, capture_output=True)
-    subprocess.run(
-        ["git", "commit", "-m", "fix: AutoPatch generated patch"],
-        cwd=cwd, check=True, capture_output=True, text=True,
-    )
-
-    # 5. Push（token 嵌入 HTTPS URL，支持私有仓库）
-    remote_url = (
-        f"https://x-access-token:{token}@github.com/"
-        f"{repo_info.owner}/{repo_info.repo}.git"
-    )
-    git_push_cmd = ["git", "-c", "credential.helper=", "push", remote_url, branch]
-    result = subprocess.run(
-        git_push_cmd,
-        cwd=cwd, capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        # 分支已存在时追加时间戳后缀重试一次
-        if "already exists" in result.stderr:
-            from datetime import datetime
-            branch_retry = f"{branch}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            subprocess.run(
-                ["git", "branch", "-m", branch, branch_retry],
-                cwd=cwd, check=True, capture_output=True,
-            )
-            subprocess.run(
-                ["git", "-c", "credential.helper=", "push", remote_url, branch_retry],
-                cwd=cwd, check=True, capture_output=True, text=True,
-            )
-            logger.info("[apply] 分支已存在，重命名为 %s 后成功 push", branch_retry)
-        else:
-            # 从错误消息中移除 remote URL（含 token），防止泄露
-            safe_stderr = result.stderr.replace(remote_url, "https://github.com/<redacted>")
-            raise subprocess.CalledProcessError(
-                result.returncode, "git push", result.stdout, safe_stderr
-            )
-
-
-async def _generate_and_save_diff(
-    tmp_dir: str,
-    issue_number: int,
-    repo_url: str,
-    review_result: str,
-) -> tuple[str, list[str]]:
-    """生成 diff 并保存到 patches/ 目录，返回 (diff_content, changed_files)。"""
-    loop = asyncio.get_running_loop()
-
-    try:
-        diff_content = await loop.run_in_executor(None, generate_diff, tmp_dir)
-    except RuntimeError as e:
-        diff_content = ""
-        logger.warning("Diff 生成失败: %s", e)
-
-    changed_files_raw = await loop.run_in_executor(None, get_changed_files, tmp_dir)
-    changed_files = [c["path"] for c in changed_files_raw]
-
-    if diff_content.strip():
-        from datetime import datetime
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        diff_path = Path("patches") / f"issue-{issue_number}_{ts}.diff"
-        await loop.run_in_executor(
-            None, write_diff_file, diff_content, diff_path,
-            repo_url, issue_number, review_result,
-        )
-        logger.info("Diff 已保存: %s", diff_path)
-
-    return diff_content, changed_files
-
-
 async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
     """
     完整的 AutoPatch 流水线，以 SSE 事件流的形式逐步推送进度。
@@ -663,7 +461,7 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
 
         # ── Step 5: 生成 Diff ────────────────────────────
         yield log_event("正在生成 diff 补丁...", "info")
-        diff_content, changed_files = await _generate_and_save_diff(
+        diff_content, changed_files = await generate_and_save_diff(
             tmp_dir, req.issueNumber, repo_info.clone_url, review_result,
         )
         if diff_content.strip():
@@ -816,7 +614,7 @@ async def _resume_pipeline_inner(task_id: str) -> AsyncGenerator[str, None]:
 
         # ── 生成 Diff ─────────────────────────────────────
         yield log_event("正在生成 diff 补丁...", "info")
-        diff_content, changed_files = await _generate_and_save_diff(
+        diff_content, changed_files = await generate_and_save_diff(
             tmp_dir, record.issue_number,
             f"https://github.com/{record.repo_url}.git", review_result,
         )
@@ -861,7 +659,7 @@ async def health():
     return {"status": "ok", "service": "AutoPatch"}
 
 
-@fastapi_app.post("/api/preview", dependencies=[Depends(_verify_api_key)])
+@fastapi_app.post("/api/preview", dependencies=[Depends(verify_api_key)])
 async def preview_endpoint(req: PatchRequest):
     """轻量预览：获取 Issue 详情 + 仓库元数据，不克隆仓库、不运行 Agent。"""
     try:
@@ -907,7 +705,7 @@ _SSE_HEADERS = {
 }
 
 
-@fastapi_app.post("/api/patch", dependencies=[Depends(_verify_api_key)])
+@fastapi_app.post("/api/patch", dependencies=[Depends(verify_api_key)])
 async def patch_endpoint(req: PatchRequest):
     """
     启动 AutoPatch 流水线，以 SSE 流式推送进度和结果。
@@ -922,7 +720,7 @@ async def patch_endpoint(req: PatchRequest):
     )
 
 
-@fastapi_app.post("/api/patch/resume", dependencies=[Depends(_verify_api_key)])
+@fastapi_app.post("/api/patch/resume", dependencies=[Depends(verify_api_key)])
 async def resume_endpoint(req: ResumeRequest):
     """
     恢复被中断的 AutoPatch 任务，从最后完成的节点继续执行。
@@ -944,7 +742,7 @@ async def list_tasks_endpoint():
     return {"tasks": [r.to_dict() for r in task_store.list_all()]}
 
 
-@fastapi_app.delete("/api/tasks/{task_id}", dependencies=[Depends(_verify_api_key)])
+@fastapi_app.delete("/api/tasks/{task_id}", dependencies=[Depends(verify_api_key)])
 async def delete_task_endpoint(task_id: str):
     """
     删除任务记录，同时删除对应的 workspace 目录（释放磁盘空间）。
@@ -959,7 +757,7 @@ async def delete_task_endpoint(task_id: str):
     return {"deleted": task_id}
 
 
-@fastapi_app.post("/api/apply", dependencies=[Depends(_verify_api_key)])
+@fastapi_app.post("/api/apply", dependencies=[Depends(verify_api_key)])
 async def apply_endpoint(req: ApplyRequest):
     """
     将 Agent 生成的 diff 应用到目标仓库并创建 Pull Request。
@@ -998,7 +796,7 @@ async def apply_endpoint(req: ApplyRequest):
         branch = f"autopatch/issue-{req.issueNumber}"
         try:
             await asyncio.get_running_loop().run_in_executor(
-                None, _git_apply_and_push,
+                None, git_apply_and_push,
                 tmp_dir, branch, req.diffContent, repo_info, token,
             )
             pr_url = await asyncio.get_running_loop().run_in_executor(

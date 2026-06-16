@@ -22,6 +22,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制应用代码
 COPY *.py ./
+COPY api/ ./api/
 COPY agent/ ./agent/
 COPY core/ ./core/
 COPY tools/ ./tools/

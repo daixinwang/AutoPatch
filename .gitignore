@@ -10,6 +10,10 @@
 # ── Python ────────────────────────────────
 # 虚拟环境
 .venv/
+.upstream/
+.uv-cache/
+.token-cache/
+.test-tmp/
 venv/
 env/
 ENV/

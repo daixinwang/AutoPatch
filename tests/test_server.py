@@ -94,6 +94,11 @@ async def test_auth_passes_with_valid_token():
 
 
 class TestApplyEndpoint:
+    @pytest.fixture(autouse=True)
+    def verified_receipt(self, monkeypatch):
+        monkeypatch.setattr("server.is_verified", lambda *args, **kwargs: True)
+        monkeypatch.setattr("server._workspace_head", lambda *args: "base")
+
     @pytest.mark.asyncio
     async def test_apply_returns_pr_url(self, monkeypatch):
         import server

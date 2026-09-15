@@ -7,7 +7,7 @@
 langgraph>=0.2.0,<0.3.0
 
 # LangGraph PostgreSQL checkpointer（断点续传持久化）
-langgraph-checkpoint-postgres>=2.0.0
+langgraph-checkpoint-postgres==2.0.19
 
 # PostgreSQL 异步驱动 + 连接池（psycopg v3）
 psycopg[binary,pool]>=3.1.0

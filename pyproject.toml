@@ -5,7 +5,7 @@ description = "AI-powered GitHub Issue auto-fix agent using LangGraph multi-agen
 requires-python = ">=3.10"
 dependencies = [
     "langgraph>=0.2.0,<0.3.0",
-    "langgraph-checkpoint-postgres>=2.0.0",
+    "langgraph-checkpoint-postgres==2.0.19",
     "psycopg[binary,pool]>=3.1.0",
     "langchain-core>=0.3.0,<0.4.0",
     "langchain-anthropic>=0.3.0,<0.4.0",

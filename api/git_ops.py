@@ -49,7 +49,7 @@ def git_apply_and_push(
 
     try:
         subprocess.run(
-            ["git", "apply", "--whitespace=fix", diff_file],
+            ["git", "apply", diff_file],
             cwd=cwd, check=True, capture_output=True, text=True,
         )
     finally:

@@ -28,13 +28,13 @@ LangGraph 多 Agent 协作架构（四阶段流水线）。
 """
 
 import os
-from typing import Annotated, Literal
+from typing import Literal
 
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_anthropic import ChatAnthropic
 from langgraph.graph import END, START, StateGraph
-from langgraph.graph.message import MessagesState, add_messages
+from langgraph.graph.message import MessagesState
 from langgraph.prebuilt import ToolNode
 
 # 加载 .env 中的环境变量，必须早于 core.config 导入。
@@ -63,7 +63,6 @@ from core.config import (
     WARN_TOKEN_LIMIT,
     COMPRESS_TOKEN_LIMIT,
     MAX_TOKEN_LIMIT,
-    MAX_REVIEW_RETRIES,
     MAX_REVIEWER_TOOL_CALLS,
     PLANNER_MODEL_NAME,
     CODER_MODEL_NAME,
@@ -106,6 +105,23 @@ class AgentState(MessagesState):
     review_result: str
     review_retries: int
     coder_steps: int
+    execution_plan: dict
+    project_profile: dict
+    test_plan: dict
+    test_report: dict
+    review_decision: dict | None
+    failure_diagnosis: dict
+    recovery_action: str
+    terminal_status: str
+    coder_retries: int
+    replans: int
+    test_replans: int
+    environment_recoveries: int
+    ablation: str
+    trace_events: list[dict]
+    execution_image: str
+    execution_python: str
+    execution_workspace: str
 
 
 # ══════════════════════════════════════════════
@@ -489,48 +505,30 @@ def index_builder_node(state: AgentState) -> dict:
     return {}
 
 
-def planner_node(state: AgentState) -> dict:
-    """
-    Planner 节点：分析 Issue，输出结构化执行计划。
+from agent import next_nodes
+from agent.next_nodes import structured_call, project_profile_node, environment_recovery_node
+from agent.models import ReviewDecision, TestReport
 
-    - 读取 issue_task 字段（原始需求）
-    - 调用无工具 LLM，生成 Markdown 格式的执行计划
-    - 将计划写入 state["plan"] 并追加到 messages
 
-    Args:
-        state: 当前 AgentState
+def planner_node(state):
+    return next_nodes.plan_node(state, _llm_planner, structured_call)
 
-    Returns:
-        更新 plan 和 messages 的状态字典
-    """
-    logger.info("📋 [Node: planner_node] Planner 开始拆解任务...")
 
-    lang = state.get("repo_language", "Unknown") or "Unknown"
-    messages = [
-        SystemMessage(content=PLANNER_SYSTEM_PROMPT, additional_kwargs={"cache_control": {"type": "ephemeral"}}),
-        HumanMessage(content=(
-            f"目标仓库编程语言：{lang}\n\n"
-            f"请根据以下 Issue 制定详细执行计划：\n\n{state['issue_task']}"
-        )),
-    ]
+def replanner_node(state):
+    state = {**state, **next_nodes.event(state, "replan_started")}
+    return next_nodes.plan_node(state, _llm_planner, structured_call, replan=True)
 
-    response: AIMessage = _llm_planner.invoke(_ensure_ends_with_user(messages))
-    plan_text: str = _extract_text(response.content)
 
-    logger.info(f"📋 [Node: planner_node] 计划制定完成（{len(plan_text)} 字符）")
-    logger.debug(f"  计划预览: {plan_text[:120]}...")
+def test_plan_node(state):
+    return next_nodes.test_plan_node(state, _llm_runner_base, structured_call)
 
-    return {
-        "plan": plan_text,
-        # 将 Planner 的计划作为 AI 消息追加到共享消息链。
-        # rstrip() 避免 Anthropic API 报 "final assistant content cannot end with trailing whitespace"。
-        # 紧跟一条 HumanMessage，确保消息链以 user 结尾，满足 Anthropic API
-        # "conversation must end with a user message" 的约束（OpenAI 不校验此规则）。
-        "messages": [
-            AIMessage(content=f"【Planner 执行计划】\n\n{plan_text}".rstrip(), name="Planner"),
-            HumanMessage(content="请按照上述执行计划开始修复 Bug。"),
-        ],
-    }
+
+def test_execute_node(state):
+    return next_nodes.test_execute_node(state)
+
+
+def failure_classifier_node(state):
+    return next_nodes.failure_classifier_node(state, _llm_review_base, structured_call)
 
 
 def coder_node(state: AgentState) -> dict:
@@ -556,7 +554,7 @@ def coder_node(state: AgentState) -> dict:
     last_msg = state["messages"][-1] if state["messages"] else None
     coming_from_tool = isinstance(last_msg, ToolMessage)
 
-    is_retry = retries > 0 and review_result.startswith("REJECT") and not coming_from_tool
+    is_retry = (retries > 0 or state.get("coder_retries", 0) > 0 or state.get("replans", 0) > 0) and not coming_from_tool
 
     if is_retry:
         logger.info(f"🔄 [Node: coder_node] 第 {retries} 次被打回，重新编码...")
@@ -618,6 +616,8 @@ def coder_node(state: AgentState) -> dict:
 
         messages = [SystemMessage(content=CODER_SYSTEM_PROMPT, additional_kwargs={"cache_control": {"type": "ephemeral"}})] + history
 
+    if state.get("execution_plan"):
+        messages.insert(1, HumanMessage(content="Current authoritative plan:\n" + str(state["execution_plan"])))
     response = _llm_with_tools.invoke(_ensure_ends_with_user(messages))
 
     if hasattr(response, "tool_calls") and response.tool_calls:
@@ -629,71 +629,10 @@ def coder_node(state: AgentState) -> dict:
     return {"messages": [response], "coder_steps": new_coder_steps}
 
 
-def test_runner_node(state: AgentState) -> dict:
-    """
-    TestRunner 节点：自动执行测试/脚本，收集真实运行结果。
-
-    职责：
-      - 判断应运行 pytest 还是直接执行脚本
-      - 调用 run_pytest / run_python_script 工具（内部 ReAct 循环）
-      - 将测试输出写入 state["test_output"]，供 Reviewer 参考
-
-    Args:
-        state: 当前 AgentState
-
-    Returns:
-        更新 test_output 和 messages 的状态字典
-    """
-    logger.info("🧪 [Node: test_runner_node] TestRunner 开始执行测试...")
-
-    messages = [
-        SystemMessage(content=TEST_RUNNER_SYSTEM_PROMPT, additional_kwargs={"cache_control": {"type": "ephemeral"}}),
-        HumanMessage(content=(
-            f"Planner 的执行计划：\n{state.get('plan', '无计划')}\n\n"
-            "请根据计划决定运行哪些测试，然后执行并给出测试执行报告。\n"
-            "工作目录为项目根目录（当前目录）。"
-        )),
-    ]
-
-    current_messages = list(messages)
-    test_report: str = ""
-
-    # TestRunner 内部 ReAct 循环：执行工具 → 收集结果 → 输出报告
-    for _round in range(8):  # 最多 8 轮，防止意外死循环
-        resp = _llm_test_runner.invoke(_ensure_ends_with_user(current_messages))
-        current_messages.append(resp)
-
-        if hasattr(resp, "tool_calls") and resp.tool_calls:
-            tool_names = [tc["name"] for tc in resp.tool_calls]
-            logger.debug(f"  [TestRunner 内部] 执行工具: {tool_names}")
-            tool_result_state = _test_runner_tool_node.invoke({"messages": current_messages})
-            new_tool_msgs = tool_result_state["messages"]
-            current_messages.extend(new_tool_msgs)
-        else:
-            # LLM 已输出最终报告
-            test_report = _extract_text(resp.content).strip()
-            break
-
-    if not test_report:
-        test_report = "[TestRunner] 未能生成测试报告（可能超出循环次数）"
-
-    logger.info(f"🧪 [Node: test_runner_node] 测试完成，报告长度: {len(test_report)} 字符")
-    # 预览关键行（PASSED/FAILED/ERROR）
-    key_lines = [l for l in test_report.splitlines() if any(
-        kw in l.upper() for kw in ["PASS", "FAIL", "ERROR", "EXIT"]
-    )]
-    if key_lines:
-        logger.debug(f"  关键行: {key_lines[:3]}")
-
-    return {
-        "test_output": test_report,
-        "messages": [
-            AIMessage(
-                content=f"【TestRunner 执行报告】\n\n{test_report}".rstrip(),
-                name="TestRunner",
-            )
-        ],
-    }
+def test_runner_node(state):
+    """Compatibility adapter; the graph uses separate planning/execution nodes."""
+    updated = {**state, **test_plan_node(state)}
+    return test_execute_node(updated)
 
 
 def reviewer_node(state: AgentState) -> dict:
@@ -766,37 +705,19 @@ def reviewer_node(state: AgentState) -> dict:
             # LLM 输出了最终结论，退出循环
             break
 
-    # 提取最终结论（最后一条 AI 消息的内容）
-    conclusion: str = _extract_text(resp.content).strip()
-    # LLM 经常在结论外包裹 Markdown 标题（"### 评审结论"）或代码围栏（```），
-    # 需要先剥离再判断 PASS/REJECT。
-    _lines = conclusion.splitlines()
-    _stripped_lines = [
-        l for l in _lines
-        if not l.strip().startswith("#") and not l.strip().startswith("```")
-    ]
-    _conclusion_inner = "\n".join(_stripped_lines).strip()
-    is_pass = _conclusion_inner.upper().startswith("PASS")
-
-    if is_pass:
-        logger.info(f"✅ [Node: reviewer_node] 评审结论: {conclusion[:100]}")
-    else:
-        logger.error(f"❌ [Node: reviewer_node] 评审结论: {conclusion[:100]}")
-
-    # 更新打回次数（仅 REJECT 时递增）
-    current_retries = state.get("review_retries", 0)
-    new_retries = current_retries if is_pass else current_retries + 1
-
-    return {
-        "review_result": conclusion,
-        "review_retries": new_retries,
-        "messages": [
-            AIMessage(
-                content=f"【Reviewer 评审结论】\n\n{conclusion}".rstrip(),
-                name="Reviewer",
-            )
-        ],
-    }
+    try:
+        decision = structured_call(_llm_review_base, ReviewDecision,
+            _ensure_ends_with_user(current_messages + [HumanMessage(content=
+                "Return the final structured review decision based on these tests and inspected files.")]))
+    except (ValueError, TypeError):
+        decision = ReviewDecision(verdict="reject", reasons=["Invalid structured review decision"],
+                                  suspected_failure_type="unrecoverable")
+    passed = decision.verdict == "pass" and TestReport.model_validate(state["test_report"]).all_required_passed
+    conclusion = "PASS" if passed else "REJECT: " + "; ".join(decision.reasons)
+    return {"review_decision": decision.model_dump(), "review_result": conclusion,
+            "review_retries": state.get("review_retries", 0) + (not passed),
+            "terminal_status": "resolved" if passed else "running",
+            "messages": [AIMessage(content=conclusion, name="Reviewer")]}
 
 
 # ══════════════════════════════════════════════
@@ -825,120 +746,46 @@ def coder_should_continue(
     return "test_runner_node"
 
 
-def reviewer_should_continue(
-    state: AgentState,
-) -> Literal["coder_node", END]:
-    """
-    Reviewer 评审后的路由：
-      - PASS 或已超出最大打回次数 → END
-      - REJECT 且未超出限制     → 打回 coder_node 重做
-    """
-    review_result = state.get("review_result", "")
-    retries = state.get("review_retries", 0)
-
-    # 剥离 Markdown 标题和代码围栏后再判断 PASS
-    _inner = "\n".join(
-        l for l in review_result.splitlines()
-        if not l.strip().startswith("#") and not l.strip().startswith("```")
-    ).strip()
-    if _inner.upper().startswith("PASS"):
-        logger.debug("🏁 [Router: reviewer] 评审通过 → END")
-        return END
-
-    if retries >= MAX_REVIEW_RETRIES:
-        logger.warning(f"⚠️ [Router: reviewer] 已打回 {retries} 次，强制结束 → END")
-        return END
-
-    logger.debug(f"🔄 [Router: reviewer] 评审未通过（第 {retries} 次打回） → coder_node")
-    return "coder_node"
+def reviewer_should_continue(state):
+    decision = state.get("review_decision") or {}
+    return END if decision.get("verdict") == "pass" and state.get("terminal_status") == "resolved" else "failure_classifier_node"
 
 
-# ══════════════════════════════════════════════
-# 6. Graph 构建与编译
-# ══════════════════════════════════════════════
+def post_test_router(state):
+    return "reviewer_node" if TestReport.model_validate(state["test_report"]).all_required_passed else "failure_classifier_node"
 
-def build_graph(checkpointer=None):
-    """
-    组装四阶段多 Agent 协作的 LangGraph StateGraph。
 
-    完整图结构：
+def recovery_router(state):
+    return {"retry_coder": "coder_node", "replan": "replanner_node", "rerun_tests": "test_plan_node",
+            "recover_environment": "environment_recovery_node", "stop": END}[state["recovery_action"]]
 
-        START
-          │
-          ▼
-      planner_node              ← 拆解任务，产出 plan
-          │
-          ▼
-       coder_node  ◄────────────────────────────────────────┐
-          │                                                  │
-          │ (coder_should_continue)                          │ (REJECT & retries < MAX)
-          ├── has tool_calls ──► tool_node ──► coder_node   │
-          │                                                  │
-          └── no tool_calls ──► test_runner_node             │
-                                       │                     │
-                                       ▼ (无条件)             │
-                                  reviewer_node ─────────────┘
-                                       │
-                                       │ (reviewer_should_continue)
-                                       ├── PASS ──► END
-                                       └── REJECT (≥MAX) ──► END
 
-    Args:
-        checkpointer: 可选的 LangGraph checkpointer（如 PostgresSaver）。
-                      提供时每个节点完成后自动持久化状态，支持断点续传。
-                      不提供时行为与原来相同（无持久化）。
-
-    Returns:
-        编译好的 CompiledGraph（Runnable）
-    """
+def build_graph(checkpointer=None, interrupt_after=None):
     graph = StateGraph(AgentState)
-
-    # ── 添加节点 ──
-    graph.add_node("index_builder_node", index_builder_node)
-    graph.add_node("planner_node", planner_node)
-    graph.add_node("coder_node", coder_node)
-    graph.add_node("tool_node", ToolNode(tools=TOOLS))        # Coder 全量工具集
-    graph.add_node("test_runner_node", test_runner_node)      # 自动运行测试
-    graph.add_node("reviewer_node", reviewer_node)            # 结合测试结果评审
-
-    # ── 添加边 ──
-    # 入口
-    graph.add_edge(START, "index_builder_node")
-    graph.add_edge("index_builder_node", "planner_node")
-    # Planner → Coder
-    graph.add_edge("planner_node", "coder_node")
-
-    # Coder：有工具调用 → tool_node，完成编码 → test_runner_node
-    graph.add_conditional_edges(
-        "coder_node",
-        coder_should_continue,
-        {
-            "tool_node": "tool_node",
-            "test_runner_node": "test_runner_node",
-        },
-    )
-
-    # tool_node 执行完毕 → 回 Coder 继续 ReAct 循环
-    graph.add_edge("tool_node", "coder_node")
-
-    # test_runner_node 完成 → 无条件进入 Reviewer
-    graph.add_edge("test_runner_node", "reviewer_node")
-
-    # Reviewer：通过 → END，打回 → Coder 重做
-    graph.add_conditional_edges(
-        "reviewer_node",
-        reviewer_should_continue,
-        {
-            "coder_node": "coder_node",
-            END: END,
-        },
-    )
-
-    logger.info("📦 [Graph] 四阶段 StateGraph 构建完成，正在编译...")
-    compiled = graph.compile(checkpointer=checkpointer)
-    cp_label = type(checkpointer).__name__ if checkpointer else "无"
-    logger.info(f"✅ [Graph] 编译成功！Checkpointer={cp_label}  流程: START→IndexBuilder→Planner→Coder⇄Tools→TestRunner→Reviewer→END")
-    return compiled
+    nodes = {"index_builder_node": index_builder_node, "project_profile_node": project_profile_node,
+             "planner_node": planner_node, "coder_node": coder_node, "test_plan_node": test_plan_node,
+             "test_execute_node": test_execute_node, "reviewer_node": reviewer_node,
+             "failure_classifier_node": failure_classifier_node, "replanner_node": replanner_node,
+             "environment_recovery_node": environment_recovery_node}
+    for name, node in nodes.items():
+        graph.add_node(name, node)
+    graph.add_node("tool_node", ToolNode(tools=TOOLS))
+    for source, target in [(START, "index_builder_node"), ("index_builder_node", "project_profile_node"),
+                           ("project_profile_node", "planner_node"), ("planner_node", "coder_node"),
+                           ("tool_node", "coder_node"), ("replanner_node", "coder_node"),
+                           ("test_plan_node", "test_execute_node")]:
+        graph.add_edge(source, target)
+    graph.add_conditional_edges("environment_recovery_node", lambda s: s["recovery_action"],
+                                {"rerun_tests": "test_execute_node", "stop": END})
+    graph.add_conditional_edges("coder_node", coder_should_continue,
+        {"tool_node": "tool_node", "test_runner_node": "test_plan_node"})
+    graph.add_conditional_edges("test_execute_node", post_test_router,
+        {n: n for n in ("reviewer_node", "failure_classifier_node")})
+    graph.add_conditional_edges("reviewer_node", reviewer_should_continue,
+        {END: END, "failure_classifier_node": "failure_classifier_node"})
+    graph.add_conditional_edges("failure_classifier_node", recovery_router,
+        {n: n for n in ("coder_node", "replanner_node", "test_plan_node", "environment_recovery_node", END)})
+    return graph.compile(checkpointer=checkpointer, interrupt_after=interrupt_after)
 
 
 # ── 模块级全局实例（供外部 import 直接使用，无 checkpointer）──

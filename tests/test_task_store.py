@@ -79,7 +79,16 @@ class TestTaskStore:
         assert deleted is True
         assert store.get(tid) is None
 
-    def test_list_all_descending(self, store: TaskStore):
+    def test_list_all_descending(self, store: TaskStore, monkeypatch):
+        # Windows clock resolution can give rapid creates identical timestamps.
+        # Supply distinct instants so this tests sorting, not clock resolution.
+        from datetime import datetime, timedelta, timezone
+        from unittest.mock import Mock
+
+        clock = Mock()
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        clock.now.side_effect = [start + timedelta(seconds=i) for i in range(3)]
+        monkeypatch.setattr("core.task_store.datetime", clock)
         ids = []
         for i in range(3):
             tid = _make_id()

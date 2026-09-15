@@ -1,0 +1,31 @@
+{
+  "protocol_version": "2026-06-14",
+  "run_id": "next-agent-auth-classified",
+  "dataset_name": "sanity-v1",
+  "mode": "agent",
+  "total_cases": 1,
+  "baseline_ready": 0,
+  "resolved": 0,
+  "partial": 0,
+  "failed": 0,
+  "agent_timeout": 0,
+  "invalid_case": 0,
+  "infra_error": 1,
+  "resolved_rate_all": 0.0,
+  "resolved_rate_valid": 0.0,
+  "cases": [
+    {
+      "case_id": "py-single-file",
+      "verdict": "infra_error",
+      "base_commit": "944b997909e9f8b54ba95584ffbffb048ee3fd29",
+      "failure_category": "model_service_error"
+    }
+  ],
+  "avg_coder_retries": 0.0,
+  "avg_replans": 0.0,
+  "avg_step_count": 0.0,
+  "avg_elapsed_seconds": 0.0,
+  "failure_type_distribution": {},
+  "recovery_success_rate": null,
+  "ablation": "full"
+}

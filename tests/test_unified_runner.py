@@ -435,7 +435,7 @@ def test_swebench_preparer_uses_instance_environment(monkeypatch, tmp_path):
 
         def setup(self):
             if self.workspace.exists():
-                shutil.rmtree(self.workspace, ignore_errors=True)
+                __import__("core.local_workspace", fromlist=["remove_workspace"]).remove_workspace(self.workspace)
             self.workspace.mkdir(parents=True)
             subprocess.run(["git", "init"], cwd=self.workspace, check=True, capture_output=True, text=True)
             subprocess.run(["git", "add", "."], cwd=self.workspace, check=True, capture_output=True, text=True)
@@ -459,7 +459,7 @@ def test_swebench_preparer_uses_instance_environment(monkeypatch, tmp_path):
         def cleanup(self):
             self.cleaned = True
             if self.workspace.exists():
-                shutil.rmtree(self.workspace, ignore_errors=True)
+                __import__("core.local_workspace", fromlist=["remove_workspace"]).remove_workspace(self.workspace)
 
     monkeypatch.setattr("eval.unified_preparers.InstanceEnvironment", FakeInstanceEnvironment)
 
@@ -511,7 +511,7 @@ def test_swebench_preparer_propagates_docker_container_info(monkeypatch, tmp_pat
 
         def setup(self):
             if self.workspace.exists():
-                shutil.rmtree(self.workspace, ignore_errors=True)
+                __import__("core.local_workspace", fromlist=["remove_workspace"]).remove_workspace(self.workspace)
             self.workspace.mkdir(parents=True)
             subprocess.run(["git", "init"], cwd=self.workspace, check=True, capture_output=True, text=True)
             subprocess.run(["git", "add", "."], cwd=self.workspace, check=True, capture_output=True, text=True)
@@ -535,7 +535,7 @@ def test_swebench_preparer_propagates_docker_container_info(monkeypatch, tmp_pat
         def cleanup(self):
             self.cleaned = True
             if self.workspace.exists():
-                shutil.rmtree(self.workspace, ignore_errors=True)
+                __import__("core.local_workspace", fromlist=["remove_workspace"]).remove_workspace(self.workspace)
 
     monkeypatch.setattr("eval.docker_env.DockerEnvironment", FakeDockerEnvironment)
 

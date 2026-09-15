@@ -11,6 +11,10 @@ from tools.execute_tools import run_python_script, verify_importable
 class TestVerifyImportable:
     """verify_importable tool tests."""
 
+    @pytest.fixture(autouse=True)
+    def trusted_fixture(self, monkeypatch):
+        monkeypatch.setenv("AUTOPATCH_EXECUTION_BACKEND", "local")
+
     def test_valid_module(self, tmp_workspace):
         (tmp_workspace / "mymod.py").write_text("x = 1\n", encoding="utf-8")
         result = verify_importable.invoke({"file_path": "mymod.py"})

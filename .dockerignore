@@ -11,3 +11,7 @@ patches/
 tasks/
 eval/results/
 .claude/
+.upstream/
+.uv-cache/
+.token-cache/
+.test-tmp/

@@ -1,0 +1,58 @@
+{
+  "protocol_version": "2026-06-14",
+  "run_id": "next-full",
+  "dataset_name": "sanity-v3",
+  "mode": "scripted",
+  "total_cases": 5,
+  "baseline_ready": 0,
+  "resolved": 3,
+  "partial": 0,
+  "failed": 1,
+  "agent_timeout": 0,
+  "invalid_case": 0,
+  "infra_error": 1,
+  "resolved_rate_all": 0.6,
+  "resolved_rate_valid": 0.75,
+  "cases": [
+    {
+      "case_id": "v3-01-test-selection-error",
+      "verdict": "resolved",
+      "base_commit": "f25412caef1ca88a9adf5708114f3b890a195a37"
+    },
+    {
+      "case_id": "v3-02-wrong-plan",
+      "verdict": "resolved",
+      "base_commit": "ecf96975f167cbd475457af3d80ec080742c4db4"
+    },
+    {
+      "case_id": "v3-03-implementation-error",
+      "verdict": "resolved",
+      "base_commit": "89179e97ec5990b234eacf547ab630a02973f7c9"
+    },
+    {
+      "case_id": "v3-04-environment-error",
+      "verdict": "infra_error",
+      "base_commit": "4aac434993fca54830a0f32ad14b5ce89f2b4065",
+      "failure_category": "environment_error"
+    },
+    {
+      "case_id": "v3-05-unrecoverable",
+      "verdict": "failed",
+      "base_commit": "69e7ce41889cd232d2732ddde6610146b1bfdf33",
+      "failure_category": "wrong_fix"
+    }
+  ],
+  "avg_coder_retries": 0.2,
+  "avg_replans": 0.2,
+  "avg_step_count": 9.4,
+  "avg_elapsed_seconds": 1.0187999999994646,
+  "failure_type_distribution": {
+    "test_selection_error": 1,
+    "wrong_plan": 1,
+    "implementation_error": 1,
+    "environment_error": 1,
+    "unrecoverable": 1
+  },
+  "recovery_success_rate": 1.0,
+  "ablation": "full"
+}

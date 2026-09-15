@@ -1,11 +1,14 @@
 """Failure-aware node implementations, with injectable structured model calls."""
 
 import json
+import logging
 import os
 import subprocess
 from pathlib import Path
 
+from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import ValidationError
 
 from agent.failure import LIMITS, deterministic_diagnosis, diagnosis, recovery_action
 from agent.models import (
@@ -23,8 +26,24 @@ from tools.workspace import get_workspace
 
 
 def structured_call(llm, schema, messages):
-    """Provider-native schema, then independent validation; no textual PASS routing."""
-    return schema.model_validate(llm.with_structured_output(schema).invoke(messages))
+    """Validate native tool output, with at most two format-only regenerations."""
+    output = llm.with_structured_output(schema)
+    instruction = (
+        f"Call the {schema.__name__} tool with valid JSON arguments matching its schema. "
+        "Use JSON arrays and objects, never XML tags or attributes. Return a concise complete result."
+    )
+    for attempt in range(3):
+        feedback = "" if attempt == 0 else "The previous response failed schema validation. Regenerate it. "
+        # Do not replay malformed tool calls: they have no matching tool result.
+        request = [*messages, HumanMessage(content=feedback + instruction)]
+        try:
+            return schema.model_validate(output.invoke(request))
+        except (ValidationError, OutputParserException) as exc:
+            logging.getLogger(__name__).warning(
+                "%s structured response invalid (attempt %d/3)", schema.__name__, attempt + 1
+            )
+            if attempt == 2:
+                raise ValueError(f"Invalid {schema.__name__} response after 3 attempts") from exc
 
 
 def event(state, kind, **data):

@@ -1,0 +1,30 @@
+{
+  "protocol_version": "2026-06-14",
+  "run_id": "next-ark-format-fix",
+  "dataset_name": "sanity-v1",
+  "mode": "agent",
+  "total_cases": 1,
+  "baseline_ready": 0,
+  "resolved": 1,
+  "partial": 0,
+  "failed": 0,
+  "agent_timeout": 0,
+  "invalid_case": 0,
+  "infra_error": 0,
+  "resolved_rate_all": 1.0,
+  "resolved_rate_valid": 1.0,
+  "cases": [
+    {
+      "case_id": "py-single-file",
+      "verdict": "resolved",
+      "base_commit": "5c2de40e3cd44bd9342315d63952f95eac81ad0b"
+    }
+  ],
+  "avg_coder_retries": 0.0,
+  "avg_replans": 0.0,
+  "avg_step_count": 15.0,
+  "avg_elapsed_seconds": 32.328000000008615,
+  "failure_type_distribution": {},
+  "recovery_success_rate": null,
+  "ablation": "full"
+}

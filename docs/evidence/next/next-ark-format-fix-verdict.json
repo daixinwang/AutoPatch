@@ -1,0 +1,21 @@
+{
+  "case_id": "py-single-file",
+  "verdict": "resolved",
+  "reason": "FAIL_TO_PASS and PASS_TO_PASS passed after patch.",
+  "patch_applies": true,
+  "modified_test_files": false,
+  "fail_to_pass": {
+    "total": 1,
+    "passed": 1,
+    "failed": []
+  },
+  "pass_to_pass": {
+    "total": 1,
+    "passed": 1,
+    "failed": []
+  },
+  "timing": {
+    "agent_seconds": null,
+    "verification_seconds": null
+  }
+}

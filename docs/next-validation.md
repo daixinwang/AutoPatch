@@ -4,7 +4,8 @@
 
 | Check | Observed result |
 |---|---|
-| Final full unit/integration suite | 191 passed, no skipped tests; one dependency deprecation warning |
+| Earlier full unit/integration suite | 191 passed, no skipped tests; one dependency deprecation warning |
+| Format-retry full default suite | 192 passed, 4 opt-in integration tests skipped; one dependency deprecation warning |
 | New-module Ruff checks | Passed |
 | Frontend `npm ci` and `npm run build` | Passed; Vite output generated |
 | sanity-v1, existing resolved mock patches | 4 resolved, 1 correctly invalid baseline |
@@ -17,7 +18,8 @@
 | Live Docker tests | Host-file isolation, no credentials/socket, timeout cleanup, and pytest failure → pass verified |
 | Live PostgreSQL checkpoint | Replanner checkpoint persisted and resumed on a separate temporary PostgreSQL container |
 | Real model connectivity | Ark `/api/plan` with `ark-code-latest` succeeded; service returned `deepseek-v4-1-flash` |
-| Real model repair smoke | Thinking mode rejected forced tool choice; disabling thinking fixed that error, but two repair attempts failed ExecutionPlan validation due to malformed model tool arguments |
+| Real model repair smoke after format recovery | sanity-v1 py-single-file resolved with current deepseek-v4-1-flash; Docker pytest 2 passed, independent FAIL_TO_PASS 1/1 and PASS_TO_PASS 1/1, test files unchanged |
+| Real model sanity-v2 | 5/5 resolved with the same model and Docker backend; independent FAIL_TO_PASS 5/5 and PASS_TO_PASS 5/5, no test files modified |
 | Ark compatibility regression | 10 passed, 1 opt-in PostgreSQL test skipped; one dependency deprecation warning |
 
 Machine-readable aggregate reports are in [evidence/next](evidence/next).
@@ -26,8 +28,8 @@ Full raw artifacts remain in the ignored `eval/results/` directory.
 The wrong-plan scenario resolves only with replanning in this controlled test.
 The classifier and coder are scripted in these two runs; the actual graph,
 fixture subprocess tests and independent patch validation run normally.
-These numbers **are not LLM effectiveness scores**. The v1/v2 checks above
-also do not substitute for real model regression runs.
+These scripted numbers **are not LLM effectiveness scores**. The mock-patch
+and baseline-only checks also do not substitute for real model regression runs.
 
 ## Open verification
 
@@ -36,11 +38,15 @@ also do not substitute for real model regression runs.
   Local configuration now uses these for all four roles, with
   `AUTOPATCH_DISABLE_THINKING=true`. The `/api/plan/v3` endpoint is for the
   OpenAI protocol and does not match this project's Anthropic client.
-  Connectivity and a simple structured-output probe succeeded. However,
-  two real repair attempts returned invalid ExecutionPlan tool arguments;
+  Before format recovery, two real repair attempts returned invalid ExecutionPlan tool arguments;
   inspection found malformed JSON, not a token-limit stop. These responses
-  are rejected by validation. Actual model-driven repair, full comparisons
-  and SWE-bench smoke remain unverified. Aggregate reports for both attempts
+  are rejected by validation. The fix gives explicit JSON tool instructions and
+  regenerates invalid structured output at most twice. It never repairs JSON
+  heuristically or skips Pydantic validation; transport errors propagate.
+  The single-file real repair then passed after two format retries, followed by
+  all five multi-file sanity-v2 cases. These small fixtures do not establish a
+  general success rate. Full ablation comparisons
+  and SWE-bench smoke remain unverified. Aggregate reports for earlier attempts
   are included in `docs/evidence/next/`; raw artifacts remain in ignored
   `eval/results/next-ark-plan-compatible/` and `next-ark-plan-confirm/`.
   Earlier authentication failures are retained as historical evidence.
@@ -51,7 +57,7 @@ also do not substitute for real model regression runs.
   and graph resume rather than model reasoning.
 - SWE-bench prepared image/interpreter/workspace now propagate into the sandbox;
   this handoff has regression tests but the large official instances remain
-  unexecuted; the current real model repair smoke has not passed.
+  unexecuted.
 - `langgraph-checkpoint-postgres==2.0.19` is pinned to retain LangGraph 0.2;
   later 2.x and 3.x releases warn that they require a newer graph runtime.
 
@@ -65,6 +71,8 @@ author/committer identity. Tokenizer data must be cached or downloadable.
 
 ```sh
 pytest -q
+python -m eval.unified --dataset sanity-v1 --mode agent --case-ids py-single-file
+python -m eval.unified --dataset sanity-v2 --mode agent
 python -m eval.unified --dataset sanity-v1 --mode mock-patch --mock-patch-dir eval/mock_patches/sanity-v1/resolved
 python -m eval.unified --dataset sanity-v2 --mode baseline-only
 python -m eval.unified --dataset sanity-v3 --mode scripted --ablation full

@@ -145,7 +145,7 @@ def run_dataset_with_mock_patches(
         "dataset_name": dataset_dir.name,
         "dataset_version": "2026-06-14",
         "case_ids": [result.case_id for result in results],
-        "mock_patch_dir": str(patch_dir),
+        "mock_patch_dir": patch_dir.as_posix(),
         "agent_config": {
             "mode": "mock_patch",
             "rag_enabled": None,

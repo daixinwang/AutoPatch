@@ -125,6 +125,10 @@ def run_agent_on_issue(
     issue_text: str,
     working_dir: str,
     repo_language: str = "Unknown",
+    ablation: str = "full",
+    execution_image: str | None = None,
+    execution_python: str | None = None,
+    execution_workspace: str = "/workspace",
 ) -> dict:
     """
     以指定目录为工作区，运行多 Agent 流水线处理 Issue。
@@ -141,11 +145,14 @@ def run_agent_on_issue(
         包含 final_output / review_result / step_count 的结果字典
     """
     # 设置工作目录（不修改全局 CWD，通过 ContextVar 传递给工具）
+    import time
+    started = time.monotonic()
     _ws_token = set_workspace(working_dir)
     logger.info(f"📂 [AutoPatch] 工作目录已设置: {working_dir}")
 
     try:
         initial_state: AgentState = {
+            "ablation": ablation,
             "messages":      [HumanMessage(content=f"Issue 需求：\n\n{issue_text}")],
             "issue_task":    issue_text,
             "repo_language": repo_language,
@@ -154,6 +161,10 @@ def run_agent_on_issue(
             "review_result": "",
             "review_retries": 0,
         }
+
+        if execution_image:
+            initial_state.update(execution_image=execution_image, execution_python=execution_python,
+                                 execution_workspace=execution_workspace)
 
         NODE_ICONS = {
             "index_builder_node": "🔎 IndexBuilder",
@@ -164,6 +175,7 @@ def run_agent_on_issue(
             "reviewer_node":    "🔍 Reviewer",
         }
 
+        collected_state = {}
         step_count = 0
         final_output = ""
         review_result = ""
@@ -178,6 +190,8 @@ def run_agent_on_issue(
                 logger.info(f"[Step {step_count}] {icon}")
                 if node_output is None:
                     continue
+
+                collected_state.update({k: v for k, v in node_output.items() if k != "messages"})
 
                 if "plan" in node_output and node_output["plan"]:
                     preview = node_output["plan"][:120].replace("\n", " ")
@@ -220,9 +234,11 @@ def run_agent_on_issue(
         logger.info(f"✅ Agent 流水线完成，共 {step_count} 步")
 
         return {
+            **collected_state,
             "final_output": final_output,
             "review_result": review_result,
             "step_count": step_count,
+            "elapsed_seconds": time.monotonic() - started,
         }
 
     finally:
@@ -250,6 +266,7 @@ def main() -> int:
         return 1
 
     parser = build_arg_parser()
+    parser.add_argument("--unsafe-direct-workspace", action="store_true", help="Edit a trusted local checkout directly")
     args = parser.parse_args()
 
     # ── 打印 Banner ──
@@ -294,13 +311,19 @@ def main() -> int:
     logger.info("📦 [3/5] 准备工作区...")
 
     # 确定工作区目录和是否需要 clone
+    local_context = None
     if args.workspace_dir:
         workspace_path = Path(args.workspace_dir).resolve()
         if not workspace_path.exists():
             logger.error(f"  ❌ 指定的工作区目录不存在: {workspace_path}")
             return 1
         logger.info(f"  ✅ 使用已有工作区: {workspace_path}")
-        workspace = None  # 不需要 clone，也不需要清理
+        workspace = None
+        if not args.unsafe_direct_workspace:
+            from core.local_workspace import isolated_workspace
+            local_context = isolated_workspace(workspace_path, keep=args.keep_workspace)
+            workspace_path = local_context.__enter__()
+            logger.info("Isolated clone of committed HEAD: %s", workspace_path)
     else:
         # 创建临时目录并 clone
         tmp_base = tempfile.mkdtemp(prefix=f"autopatch_{repo_info.repo}_")
@@ -373,6 +396,8 @@ def main() -> int:
         # 清理临时工作区（除非用户要求保留）
         if workspace and not args.keep_workspace:
             workspace.cleanup()
+        if local_context:
+            local_context.__exit__(None, None, None)
         elif workspace and args.keep_workspace:
             logger.info(f"📁 工作区已保留（--keep-workspace）: {workspace_path}")
 
@@ -395,7 +420,7 @@ def _print_final_report(
 
     review = agent_result.get("review_result", "")
     if review.upper().startswith("PASS"):
-        logger.info(f"  评审结论   : ✅ PASS")
+        logger.info("  评审结论   : ✅ PASS")
     elif review.upper().startswith("REJECT"):
         logger.warning(f"  评审结论   : ⚠️  {review[:80]}")
     else:
@@ -403,13 +428,13 @@ def _print_final_report(
 
     if diff_path:
         logger.info(f"  Diff 文件  : {diff_path.resolve()}")
-        logger.info(f"  应用补丁命令（在目标仓库根目录执行）:")
+        logger.info("  应用补丁命令（在目标仓库根目录执行）:")
         logger.info(f"  git apply {diff_path.resolve()}")
     else:
-        logger.info(f"  Diff 文件  : 无（未检测到文件变更）")
+        logger.info("  Diff 文件  : 无（未检测到文件变更）")
 
     if agent_result.get("final_output"):
-        logger.info(f"  Agent 最终报告:")
+        logger.info("  Agent 最终报告:")
         for line in agent_result["final_output"].splitlines():
             logger.info(f"  {line}")
 

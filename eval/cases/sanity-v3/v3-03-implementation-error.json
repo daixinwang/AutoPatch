@@ -1,0 +1,20 @@
+{
+  "case_id": "v3-03-implementation-error",
+  "dataset": "sanity-v3",
+  "language": "Python",
+  "fixture_path": "eval/fixtures/sanity-v3/recovery",
+  "issue_title": "Addition fails through the API and service",
+  "issue_body": "Both calculate and add must implement integer addition, including negative operands. Preserve zero behavior.",
+  "fail_to_pass": [
+    "tests/test_calculate.py::test_positive",
+    "tests/test_calculate.py::test_negative"
+  ],
+  "pass_to_pass": [
+    "tests/test_calculate.py::test_zero"
+  ],
+  "expected_files": [
+    "service.py"
+  ],
+  "recovery_scenario": "implementation_error",
+  "analysis_notes": "Scripted mode injects this first-round failure for routing regression. Agent mode is unforced and must report observed routes."
+}

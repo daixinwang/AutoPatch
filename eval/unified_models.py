@@ -85,6 +85,7 @@ class PreparedWorkspace:
     cleanup: Optional[Any] = None
     docker_container: Optional[str] = None
     docker_container_path: Optional[str] = None
+    docker_image: Optional[str] = None
 
 
 def is_test_path(path: str) -> bool:

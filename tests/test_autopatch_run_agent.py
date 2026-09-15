@@ -21,6 +21,7 @@ def test_run_agent_on_issue_ignores_none_node_outputs(monkeypatch, tmp_path):
 
     assert result["review_result"] == "PASS\nReason: ok"
     assert result["step_count"] == 3
+    assert result["elapsed_seconds"] >= 0
 
 
 def test_extract_text_handles_anthropic_content_blocks():
@@ -35,13 +36,32 @@ def test_extract_text_handles_anthropic_content_blocks():
     assert _extract_text(content) == "Line one Line two"
 
 
-def test_planner_node_accepts_list_content_blocks(monkeypatch):
-    from langchain_core.messages import AIMessage
+def test_prepared_execution_environment_enters_graph_state(monkeypatch, tmp_path):
+    import autopatch
+
+    seen = {}
+
+    class App:
+        def stream(self, initial_state, config, stream_mode):
+            seen.update(initial_state)
+            return iter([])
+
+    monkeypatch.setattr(autopatch, "app", App())
+    run_agent_on_issue("fix", str(tmp_path), execution_image="prepared:v1",
+                       execution_python="/opt/miniconda3/envs/testbed/bin/python", execution_workspace="/testbed")
+    assert seen["execution_image"] == "prepared:v1"
+    assert seen["execution_workspace"] == "/testbed"
+
+
+def test_planner_node_accepts_validated_execution_plan(monkeypatch):
     from agent import graph
 
     class _FakePlanner:
+        def with_structured_output(self, schema):
+            self.schema = schema
+            return self
         def invoke(self, messages):
-            return AIMessage(content=[{"type": "text", "text": "### Execution Plan\n1. Fix calculator"}])
+            return self.schema(summary="Fix calculator", steps=[{"id": "1", "objective": "Fix calculator"}])
 
     monkeypatch.setattr(graph, "_llm_planner", _FakePlanner())
 
@@ -58,7 +78,7 @@ def test_planner_node_accepts_list_content_blocks(monkeypatch):
         }
     )
 
-    assert result["plan"] == "### Execution Plan\n1. Fix calculator"
+    assert result["execution_plan"]["summary"] == "Fix calculator"
 
 
 def test_index_builder_node_skips_when_rag_is_disabled(monkeypatch, tmp_path):

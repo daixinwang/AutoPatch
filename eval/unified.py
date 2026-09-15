@@ -46,10 +46,11 @@ def build_parser() -> ArgumentParser:
     parser.add_argument(
         "--mode",
         required=True,
-        choices=("baseline-only", "mock-patch", "agent"),
+        choices=("baseline-only", "mock-patch", "agent", "scripted"),
         help="Evaluation mode",
     )
 
+    parser.add_argument("--ablation", choices=("full", "no_replanner"), default="full")
     parser.add_argument("--results-dir", default="eval/results")
     parser.add_argument("--run-id")
     parser.add_argument("--cases-dir", default=str(DEFAULT_DATASET_CASES_DIR))
@@ -74,7 +75,7 @@ def _filter_cases_by_ids(cases: List[UnifiedCase], case_ids: List[str]) -> List[
 
 
 def resolve_cases(args: Namespace) -> List[UnifiedCase]:
-    if args.dataset in {"sanity-v1", "sanity-v2"}:
+    if args.dataset in {"sanity-v1", "sanity-v2", "sanity-v3"}:
         cases_dir = Path(args.cases_dir) / args.dataset
         provider = LocalSanityProvider(dataset_name=args.dataset, cases_dir=cases_dir)
         cases = provider.load()
@@ -152,6 +153,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         mode=args.mode,
         mock_patch_dir=Path(args.mock_patch_dir) if args.mock_patch_dir else None,
         eval_config=config,
+        ablation=args.ablation,
     )
     runner.run()
 

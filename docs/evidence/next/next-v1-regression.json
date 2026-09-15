@@ -1,0 +1,51 @@
+{
+  "protocol_version": "2026-06-14",
+  "run_id": "next-v1-regression",
+  "dataset_name": "sanity-v1",
+  "mode": "mock-patch",
+  "total_cases": 5,
+  "baseline_ready": 0,
+  "resolved": 4,
+  "partial": 0,
+  "failed": 0,
+  "agent_timeout": 0,
+  "invalid_case": 1,
+  "infra_error": 0,
+  "resolved_rate_all": 0.8,
+  "resolved_rate_valid": 1.0,
+  "cases": [
+    {
+      "case_id": "invalid-baseline",
+      "verdict": "invalid_case",
+      "base_commit": "7838e3e7253ffbca14f35148ccd983094c4750d9",
+      "failure_category": "invalid_case"
+    },
+    {
+      "case_id": "py-multi-file",
+      "verdict": "resolved",
+      "base_commit": "49a8bbdf07c4aa5b105656c283d880ade8818174"
+    },
+    {
+      "case_id": "py-regression-risk",
+      "verdict": "resolved",
+      "base_commit": "73c27fe16c1c89bfa43fa62b88d364b4cf3d14d8"
+    },
+    {
+      "case_id": "py-single-file",
+      "verdict": "resolved",
+      "base_commit": "39a3079c090bd575553b173937ad5c27b447390b"
+    },
+    {
+      "case_id": "py-test-modification-guard",
+      "verdict": "resolved",
+      "base_commit": "337a312d7b5d582629ff5f77f1d4a7bcebb19a2c"
+    }
+  ],
+  "avg_coder_retries": 0.0,
+  "avg_replans": 0.0,
+  "avg_step_count": 0.0,
+  "avg_elapsed_seconds": 0.0,
+  "failure_type_distribution": {},
+  "recovery_success_rate": null,
+  "ablation": "full"
+}

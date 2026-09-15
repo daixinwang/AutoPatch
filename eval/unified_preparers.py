@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+from core.local_workspace import remove_workspace
 from eval.config import EvalConfig
 from eval.dataset import SWEBenchInstance
 from eval.instance_env import InstanceEnvironment
@@ -23,19 +24,20 @@ class LocalFixturePreparer:
 
         workspace = self.run_dir / "workspaces" / case.case_id
         if workspace.exists():
-            shutil.rmtree(workspace, ignore_errors=True)
+            remove_workspace(workspace)
 
         fixture_path = case.fixture_path
         if not fixture_path.is_absolute():
             fixture_path = self.project_root / fixture_path
 
-        shutil.copytree(fixture_path, workspace)
+        shutil.copytree(fixture_path, workspace, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache", "*.pyc"))
+        (workspace / ".gitignore").write_text("__pycache__/\n.pytest_cache/\n*.pyc\n", encoding="utf-8")
         base_commit = _init_git_baseline(workspace)
 
         return PreparedWorkspace(
             workspace=workspace,
             base_commit=base_commit,
-            cleanup=lambda: shutil.rmtree(workspace, ignore_errors=True),
+            cleanup=lambda: remove_workspace(workspace),
         )
 
 
@@ -83,6 +85,7 @@ class SWEBenchPreparer:
             cleanup=env.cleanup,
             docker_container=getattr(env, "container_name", None),
             docker_container_path=getattr(env, "_container_path", None),
+            docker_image=getattr(env, "image_name", None) if self.config.use_docker else None,
         )
 
 

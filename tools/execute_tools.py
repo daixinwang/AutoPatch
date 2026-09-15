@@ -390,7 +390,7 @@ def verify_importable(file_path: str) -> str:
         a string containing the full error on failure.
     """
     logger.debug(f"  [Tool: verify_importable] verifying file: {file_path}")
-    if os.getenv("AUTOPATCH_DOCKER_EVAL"):
+    if os.getenv("AUTOPATCH_DOCKER_EVAL") or os.getenv("AUTOPATCH_EXECUTION_BACKEND", "docker") != "local":
         logger.info(f"  [Tool: verify_importable] Docker eval mode, skipping local import check: {file_path}")
         return "[SKIPPED] Local import verification is disabled in Docker eval mode. Rely on TestRunner results instead."
     try:

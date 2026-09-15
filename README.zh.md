@@ -1,3 +1,8 @@
+> **AutoPatch Next：**新增结构化状态、确定性测试执行、失败分类、有限重规划、
+> Docker 隔离执行与可复现的恢复评测。
+> 详见[架构说明](docs/architecture-next.md)、[验证结果](docs/next-validation.md)
+> 和[实现清单](SPEC.md)。下方保留原项目文档。
+
 <div align="center">
 
 <img src="https://img.shields.io/badge/AutoPatch-AI%20Agent-6366f1?style=for-the-badge&logo=github&logoColor=white" alt="AutoPatch" />

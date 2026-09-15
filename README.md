@@ -1,3 +1,8 @@
+> **AutoPatch Next:** typed state, deterministic tests, failure classification,
+> bounded replanning, Docker execution and reproducible recovery evaluation.
+> See [architecture](docs/architecture-next.md), [validation](docs/next-validation.md),
+> and [implementation checklist](SPEC.md). The original project documentation follows.
+
 <div align="center">
 
 <img src="https://img.shields.io/badge/AutoPatch-AI%20Agent-6366f1?style=for-the-badge&logo=github&logoColor=white" alt="AutoPatch" />

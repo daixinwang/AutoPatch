@@ -1,0 +1,50 @@
+{
+  "protocol_version": "2026-06-14",
+  "run_id": "next-ark-v2-live",
+  "dataset_name": "sanity-v2",
+  "mode": "agent",
+  "total_cases": 5,
+  "baseline_ready": 0,
+  "resolved": 5,
+  "partial": 0,
+  "failed": 0,
+  "agent_timeout": 0,
+  "invalid_case": 0,
+  "infra_error": 0,
+  "resolved_rate_all": 1.0,
+  "resolved_rate_valid": 1.0,
+  "cases": [
+    {
+      "case_id": "py-call-chain-normalization",
+      "verdict": "resolved",
+      "base_commit": "8bf90c46a3da1b554b6e38fbf2809d1ddfc44b4c"
+    },
+    {
+      "case_id": "py-error-message-indirect",
+      "verdict": "resolved",
+      "base_commit": "9ee730ef71d794938e1d129a7c714592aee5de6c"
+    },
+    {
+      "case_id": "py-readme-contract",
+      "verdict": "resolved",
+      "base_commit": "223ce80a45514b042a7e9838053a9b3ad4e5cbb4"
+    },
+    {
+      "case_id": "py-security-boundary",
+      "verdict": "resolved",
+      "base_commit": "b8136f77be1bcbcb262146c5f86ff82a0850f2ed"
+    },
+    {
+      "case_id": "py-stateful-edge-case",
+      "verdict": "resolved",
+      "base_commit": "dc489f1d99b73e643040f07f8a1ecffea02acd91"
+    }
+  ],
+  "avg_coder_retries": 0.0,
+  "avg_replans": 0.0,
+  "avg_step_count": 15.4,
+  "avg_elapsed_seconds": 33.081200000000536,
+  "failure_type_distribution": {},
+  "recovery_success_rate": null,
+  "ablation": "full"
+}

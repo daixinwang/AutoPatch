@@ -39,7 +39,10 @@ class UnifiedEvalRunner:
         mode: EvalMode,
         mock_patch_dir: Optional[Path] = None,
         eval_config: Optional[EvalConfig] = None,
+        ablation: str = "full",
     ):
+        self.ablation = ablation
+        self.agent_results = {}
         self.cases = cases
         self.run_id = run_id
         self.results_dir = Path(results_dir)
@@ -87,6 +90,9 @@ class UnifiedEvalRunner:
             "cases": case_reports,
         }
 
+        from eval.recovery_metrics import recovery_metrics
+        report.update(recovery_metrics(case_reports, self.agent_results))
+        report["ablation"] = self.ablation
         autopatch_commit = self._git_output(self.project_root, ["git", "rev-parse", "HEAD"]) or None
         autopatch_dirty = bool(self._git_output(self.project_root, ["git", "status", "--short"]))
         config = {
@@ -97,6 +103,7 @@ class UnifiedEvalRunner:
             "autopatch_commit": autopatch_commit,
             "autopatch_dirty": autopatch_dirty,
             "mode": self.mode,
+            "ablation": self.ablation,
             "case_ids": [case.case_id for case in self.cases],
             "agent_config": {
                 "mode": self.mode,
@@ -174,7 +181,7 @@ class UnifiedEvalRunner:
                 failure_category = patch_result.get("failure_category")
                 self._append_trace_event(trace_path, {"type": "case_finished", "case_id": case.case_id, "verdict": verdict})
                 return self._case_report(case, verdict, prepared.base_commit, failure_category)
-        except TimeoutError as exc:
+        except TimeoutError:
             self._write_changed_files(case_dir, [])
             self._write_patch_diff(case_dir, "")
             self._write_verdict(
@@ -270,14 +277,35 @@ class UnifiedEvalRunner:
             return self._apply_mock_patch(case, prepared, case_dir)
 
         self._append_trace_event(trace_path, {"type": "agent_started", "case_id": case.case_id})
-        from autopatch import run_agent_on_issue
+        if self.mode == "scripted":
+            from eval.scripted_recovery import run_scripted
+            def run_agent_on_issue(**kwargs):
+                return run_scripted(case, prepared.workspace, self.ablation)
+        else:
+            from autopatch import run_agent_on_issue
 
         try:
-            run_agent_on_issue(
+            result = run_agent_on_issue(
                 issue_text=case.issue_markdown(),
                 working_dir=str(prepared.workspace),
                 repo_language=case.language,
+                **({"ablation": self.ablation} if self.ablation != "full" else {}),
+                **({"execution_image": prepared.docker_image,
+                    "execution_python": "/opt/miniconda3/envs/testbed/bin/python",
+                    "execution_workspace": prepared.docker_container_path or "/testbed"}
+                   if prepared.docker_image else {}),
             )
+            result = result or {}
+            self.agent_results[case.case_id] = result
+            for event in result.get("trace_events", []):
+                self._append_trace_event(trace_path, event)
+            self._write_json(case_dir / "agent-state.json", result)
+            if result.get("terminal_status") == "infra_error":
+                self._write_patch_diff(case_dir, "")
+                self._write_changed_files(case_dir, [])
+                self._write_verdict(case_dir, case.case_id, "infra_error", "Agent reported infrastructure failure",
+                                    False, False, "environment_error", {}, {})
+                return {"verdict": "infra_error", "failure_category": "environment_error"}
         except TimeoutError:
             self._append_trace_event(trace_path, {"type": "agent_finished", "case_id": case.case_id, "status": "timeout"})
             self._write_changed_files(case_dir, [])
@@ -295,22 +323,27 @@ class UnifiedEvalRunner:
             )
             return {"verdict": "failed", "failure_category": "timeout"}
         except Exception as exc:
+            import anthropic
+            service_error = isinstance(exc, (anthropic.APIConnectionError, anthropic.AuthenticationError,
+                anthropic.PermissionDeniedError, anthropic.RateLimitError, anthropic.InternalServerError))
+            failure_verdict = "infra_error" if service_error else "failed"
+            failure_category = "model_service_error" if service_error else "tool_failure"
             self._append_trace_event(trace_path, {"type": "agent_failed", "case_id": case.case_id, "error": str(exc)})
             self._write_changed_files(case_dir, [])
             self._write_patch_diff(case_dir, "")
             self._write_verdict(
                 case_dir,
                 case.case_id,
-                "failed",
+                failure_verdict,
                 f"Agent execution failed: {type(exc).__name__}: {exc}",
                 False,
                 False,
-                "tool_failure",
+                failure_category,
                 {},
                 {},
             )
-            self._append_trace_event(trace_path, {"type": "case_finished", "case_id": case.case_id, "verdict": "failed"})
-            return {"verdict": "failed", "failure_category": "tool_failure"}
+            self._append_trace_event(trace_path, {"type": "case_finished", "case_id": case.case_id, "verdict": failure_verdict})
+            return {"verdict": failure_verdict, "failure_category": failure_category}
 
         self._append_trace_event(trace_path, {"type": "agent_finished", "case_id": case.case_id, "status": "ok"})
         return self._validate_patch(case, prepared, case_dir)

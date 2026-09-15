@@ -59,6 +59,7 @@ from api.auth import verify_api_key
 from api.diff_service import generate_and_save_diff
 from api.events import log_event, node_event, result_event, sse_event, task_event, token_event
 from api.git_ops import git_apply_and_push
+from core.verification import save_verification, is_verified
 from api.models import ApplyRequest, PatchRequest, PreviewResponse, ResumeRequest
 from core.logging_config import setup_logging
 
@@ -234,6 +235,7 @@ def _start_agent_stream(
 async def _consume_agent_stream(
     queue: asyncio.Queue,
     active_nodes: set[str],
+    collected_state: dict | None = None,
 ) -> AsyncGenerator[tuple[str, int, str], None]:
     """消费 LangGraph stream 队列，生成 SSE 事件。
 
@@ -270,6 +272,10 @@ async def _consume_agent_stream(
         review_update = ""
 
         for node_name, node_output in data.items():
+            if node_output is None:
+                continue
+            if collected_state is not None:
+                collected_state.update({k: v for k, v in node_output.items() if k != "messages"})
             node_id = NODE_ID_MAP.get(node_name, node_name)
 
             if node_id not in active_nodes and node_name != "tool_node":
@@ -450,7 +456,8 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
         loop = asyncio.get_running_loop()
         _start_agent_stream(initial_state, task_config, queue, loop)
 
-        async for sse_str, delta, rev_update in _consume_agent_stream(queue, active_nodes):
+        collected_state = {}
+        async for sse_str, delta, rev_update in _consume_agent_stream(queue, active_nodes, collected_state):
             step_count += delta
             if rev_update:
                 review_result = rev_update
@@ -464,8 +471,10 @@ async def run_pipeline(req: PatchRequest) -> AsyncGenerator[str, None]:
         diff_content, changed_files = await generate_and_save_diff(
             tmp_dir, req.issueNumber, repo_info.clone_url, review_result,
         )
+        base_commit = await asyncio.to_thread(_workspace_head, tmp_dir)
+        save_verification(repo_info.full_name, req.issueNumber, diff_content, collected_state, base_commit=base_commit)
         if diff_content.strip():
-            yield log_event(f"✅ Diff 已保存", "success")
+            yield log_event("✅ Diff 已保存", "success")
 
         elapsed_ms = int(time.time() * 1000) - start_ms
         yield log_event(f"🎉 流水线完成！耗时 {elapsed_ms / 1000:.1f}s", "system")
@@ -603,7 +612,8 @@ async def _resume_pipeline_inner(task_id: str) -> AsyncGenerator[str, None]:
         loop = asyncio.get_running_loop()
         _start_agent_stream(None, task_config, queue, loop)  # None = 从 checkpoint 恢复
 
-        async for sse_str, delta, rev_update in _consume_agent_stream(queue, active_nodes):
+        collected_state = {}
+        async for sse_str, delta, rev_update in _consume_agent_stream(queue, active_nodes, collected_state):
             step_count += delta
             if rev_update:
                 review_result = rev_update
@@ -618,8 +628,13 @@ async def _resume_pipeline_inner(task_id: str) -> AsyncGenerator[str, None]:
             tmp_dir, record.issue_number,
             f"https://github.com/{record.repo_url}.git", review_result,
         )
+        snapshot = await asyncio.to_thread(agent_app.get_state, task_config)
+        collected_state = {**snapshot.values, **collected_state}
+        base_commit = await asyncio.to_thread(_workspace_head, tmp_dir)
+        save_verification(parse_github_url(record.repo_url).full_name, record.issue_number, diff_content,
+                          collected_state, base_commit=base_commit)
         if diff_content.strip():
-            yield log_event(f"✅ Diff 已保存", "success")
+            yield log_event("✅ Diff 已保存", "success")
 
         elapsed_ms = int(time.time() * 1000) - start_ms
         yield log_event(f"🎉 续传流水线完成！耗时 {elapsed_ms / 1000:.1f}s", "system")
@@ -757,6 +772,12 @@ async def delete_task_endpoint(task_id: str):
     return {"deleted": task_id}
 
 
+def _workspace_head(path):
+    import subprocess
+    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=path, check=True,
+                          capture_output=True, text=True, timeout=10).stdout.strip()
+
+
 @fastapi_app.post("/api/apply", dependencies=[Depends(verify_api_key)])
 async def apply_endpoint(req: ApplyRequest):
     """
@@ -778,6 +799,9 @@ async def apply_endpoint(req: ApplyRequest):
     except ValueError as e:
         raise HTTPException(status_code=422, detail=f"URL 解析失败: {e}")
 
+    if not is_verified(repo_info.full_name, req.issueNumber, req.diffContent):
+        raise HTTPException(status_code=409, detail="This exact patch requires passing machine tests and structured review before PR creation.")
+
     client = GitHubClient()
     try:
         meta = await asyncio.get_running_loop().run_in_executor(
@@ -792,6 +816,10 @@ async def apply_endpoint(req: ApplyRequest):
             tmp_dir = await asyncio.get_running_loop().run_in_executor(None, workspace.clone)
         except RuntimeError as e:
             raise HTTPException(status_code=422, detail=f"Clone 失败: {e}")
+
+        base_commit = await asyncio.to_thread(_workspace_head, tmp_dir)
+        if not is_verified(repo_info.full_name, req.issueNumber, req.diffContent, base_commit=base_commit):
+            raise HTTPException(status_code=409, detail="Repository base changed; rerun verification before PR creation.")
 
         branch = f"autopatch/issue-{req.issueNumber}"
         try:

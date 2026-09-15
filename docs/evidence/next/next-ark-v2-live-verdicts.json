@@ -1,0 +1,107 @@
+[
+  {
+    "case_id": "py-call-chain-normalization",
+    "verdict": "resolved",
+    "reason": "FAIL_TO_PASS and PASS_TO_PASS passed after patch.",
+    "patch_applies": true,
+    "modified_test_files": false,
+    "fail_to_pass": {
+      "total": 1,
+      "passed": 1,
+      "failed": []
+    },
+    "pass_to_pass": {
+      "total": 1,
+      "passed": 1,
+      "failed": []
+    },
+    "timing": {
+      "agent_seconds": null,
+      "verification_seconds": null
+    }
+  },
+  {
+    "case_id": "py-error-message-indirect",
+    "verdict": "resolved",
+    "reason": "FAIL_TO_PASS and PASS_TO_PASS passed after patch.",
+    "patch_applies": true,
+    "modified_test_files": false,
+    "fail_to_pass": {
+      "total": 1,
+      "passed": 1,
+      "failed": []
+    },
+    "pass_to_pass": {
+      "total": 1,
+      "passed": 1,
+      "failed": []
+    },
+    "timing": {
+      "agent_seconds": null,
+      "verification_seconds": null
+    }
+  },
+  {
+    "case_id": "py-readme-contract",
+    "verdict": "resolved",
+    "reason": "FAIL_TO_PASS and PASS_TO_PASS passed after patch.",
+    "patch_applies": true,
+    "modified_test_files": false,
+    "fail_to_pass": {
+      "total": 1,
+      "passed": 1,
+      "failed": []
+    },
+    "pass_to_pass": {
+      "total": 1,
+      "passed": 1,
+      "failed": []
+    },
+    "timing": {
+      "agent_seconds": null,
+      "verification_seconds": null
+    }
+  },
+  {
+    "case_id": "py-security-boundary",
+    "verdict": "resolved",
+    "reason": "FAIL_TO_PASS and PASS_TO_PASS passed after patch.",
+    "patch_applies": true,
+    "modified_test_files": false,
+    "fail_to_pass": {
+      "total": 1,
+      "passed": 1,
+      "failed": []
+    },
+    "pass_to_pass": {
+      "total": 1,
+      "passed": 1,
+      "failed": []
+    },
+    "timing": {
+      "agent_seconds": null,
+      "verification_seconds": null
+    }
+  },
+  {
+    "case_id": "py-stateful-edge-case",
+    "verdict": "resolved",
+    "reason": "FAIL_TO_PASS and PASS_TO_PASS passed after patch.",
+    "patch_applies": true,
+    "modified_test_files": false,
+    "fail_to_pass": {
+      "total": 1,
+      "passed": 1,
+      "failed": []
+    },
+    "pass_to_pass": {
+      "total": 1,
+      "passed": 1,
+      "failed": []
+    },
+    "timing": {
+      "agent_seconds": null,
+      "verification_seconds": null
+    }
+  }
+]

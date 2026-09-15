@@ -4,11 +4,32 @@ The SWE-bench environment's image lifecycle remains in eval/docker_env.py;
 this backend uses the same Docker CLI without its trusted setup/sync operations.
 """
 
+import shutil
+import stat
 import subprocess
+import tempfile
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 from core.execution.local import execute
+from core.local_workspace import remove_workspace
+
+
+@contextmanager
+def readable_snapshot(workspace):
+    """Copy private host files for an unprivileged container; never chmod source."""
+    snapshot = Path(tempfile.mkdtemp(prefix="autopatch_input_"))
+    try:
+        shutil.copytree(workspace, snapshot, dirs_exist_ok=True, symlinks=True)
+        for path in [snapshot, *snapshot.rglob("*")]:
+            if path.is_symlink():
+                continue
+            mode = path.stat().st_mode
+            path.chmod(0o755 if path.is_dir() else 0o644 | (stat.S_IMODE(mode) & 0o111))
+        yield snapshot
+    finally:
+        remove_workspace(snapshot)
 
 
 class DockerSandboxBackend:
@@ -84,7 +105,8 @@ class DockerSandboxBackend:
     def run(self, argv, workspace, timeout=120):
         name = "autopatch-test-" + uuid.uuid4().hex
         try:
-            result = execute(self.command(argv, workspace, name), workspace, timeout)
+            with readable_snapshot(workspace) as snapshot:
+                result = execute(self.command(argv, snapshot, name), workspace, timeout)
             result.command = " ".join(argv)
             if result.exit_code in (125, 126, 127):
                 result.status = "unavailable"

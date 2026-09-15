@@ -6,6 +6,7 @@
 |---|---|
 | Earlier full unit/integration suite | 191 passed, no skipped tests; one dependency deprecation warning |
 | Format-retry full default suite | 192 passed, 4 opt-in integration tests skipped; one dependency deprecation warning |
+| Final PR audit suite | 196 passed including live Docker checks; 1 opt-in PostgreSQL test skipped; one dependency deprecation warning |
 | New-module Ruff checks | Passed |
 | Frontend `npm ci` and `npm run build` | Passed; Vite output generated |
 | sanity-v1, existing resolved mock patches | 4 resolved, 1 correctly invalid baseline |
@@ -16,6 +17,7 @@
 | Docker engine | 29.7.2 reachable |
 | Python sandbox image | Built successfully using the Google public Docker Hub cache |
 | Live Docker tests | Host-file isolation, no credentials/socket, timeout cleanup, and pytest failure → pass verified |
+| PR audit Linux permission probe | UID 65534 cannot copy the original 0700 directory / 0600 file, but can copy the readable snapshot; source modes preserved and snapshot cleaned |
 | Live PostgreSQL checkpoint | Replanner checkpoint persisted and resumed on a separate temporary PostgreSQL container |
 | Real model connectivity | Ark `/api/plan` with `ark-code-latest` succeeded; service returned `deepseek-v4-1-flash` |
 | Real model repair smoke after format recovery | sanity-v1 py-single-file resolved with current deepseek-v4-1-flash; Docker pytest 2 passed, independent FAIL_TO_PASS 1/1 and PASS_TO_PASS 1/1, test files unchanged |
@@ -89,3 +91,7 @@ Frontend installation reported 11 dependency audit findings in the existing
 lockfile. No automatic major-version dependency changes were made in this
 backend-focused branch. The upstream repository also has pre-existing global
 Ruff findings; new modules are checked separately.
+
+The PR audit ran the same installed Ruff against `main` and the reviewed branch:
+157 and 148 findings respectively. Whole-repository lint is not passing; the
+existing CI workflow gates its test job on lint. No checks were disabled.

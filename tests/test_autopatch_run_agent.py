@@ -53,8 +53,7 @@ def test_prepared_execution_environment_enters_graph_state(monkeypatch, tmp_path
     assert seen["execution_workspace"] == "/testbed"
 
 
-def test_planner_node_accepts_list_content_blocks(monkeypatch):
-    from langchain_core.messages import AIMessage
+def test_planner_node_accepts_validated_execution_plan(monkeypatch):
     from agent import graph
 
     class _FakePlanner:

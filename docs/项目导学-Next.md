@@ -25,7 +25,7 @@
 执行命令及结果见 architecture-next.md 和 next-validation.md。脚本演示中
 的计划和分类是固定输入，不能声称模型自主发现了错误。
 
-## 面试时需要能解释
+## 设计检查问题
 
 - 为什么空测试报告、无法运行测试或文本 PASS 都不能视为成功？
 - 为什么失败动作不能直接信任 LLM 的 recommended_action？

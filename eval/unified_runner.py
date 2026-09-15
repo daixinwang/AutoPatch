@@ -279,7 +279,8 @@ class UnifiedEvalRunner:
         self._append_trace_event(trace_path, {"type": "agent_started", "case_id": case.case_id})
         if self.mode == "scripted":
             from eval.scripted_recovery import run_scripted
-            run_agent_on_issue = lambda **kwargs: run_scripted(case, prepared.workspace, self.ablation)
+            def run_agent_on_issue(**kwargs):
+                return run_scripted(case, prepared.workspace, self.ablation)
         else:
             from autopatch import run_agent_on_issue
 

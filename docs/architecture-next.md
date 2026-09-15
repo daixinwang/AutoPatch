@@ -69,6 +69,12 @@ offline dependencies. `AUTOPATCH_RECOVERY_IMAGE` permits one bounded switch to
 an operator-prepared image. Without it dependency errors stop as infrastructure
 failures; the model cannot run arbitrary install commands.
 
+Before each container run, a temporary readable snapshot is made without
+changing source permissions. This supports Linux workspaces created with mode
+0700 while retaining a non-root container user. The snapshot is mounted
+read-only and removed after execution; it adds temporary host disk usage
+approximately equal to the workspace size.
+
 `AUTOPATCH_EXECUTION_BACKEND=local` explicitly opts into host execution for
 trusted local fixtures. It is not a security sandbox. Docker is an isolation
 layer, not a guarantee against kernel/container-runtime vulnerabilities.

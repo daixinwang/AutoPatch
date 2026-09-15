@@ -1,30 +1,10 @@
-"""
-agent/graph.py
---------------
-LangGraph 多 Agent 协作架构（四阶段流水线）。
+"""Failure-aware LangGraph workflow.
 
-流程：
-    START → planner_node → coder_node ⇄ tool_node
-                ↑                          ↓
-                │                   test_runner_node   ← 运行 pytest / 脚本
-                │                          ↓
-                └────── (REJECT) ── reviewer_node ──── PASS ──► END
-                              (最多 MAX_REVIEW_RETRIES 次打回)
-
-节点职责：
-  - planner_node      : 拆解 Issue，输出结构化执行计划，写入 plan 字段
-  - coder_node        : 按计划调用工具写代码（ReAct 循环）
-  - tool_node         : 执行文件读写 + 代码检索工具（LangGraph 内置 ToolNode）
-  - test_runner_node  : 自动运行 pytest / python 脚本，将结果写入 test_output
-  - reviewer_node     : 结合 test_output + 静态检查做代码 Review，决策 PASS / REJECT
-
-状态字段（AgentState）：
-  - messages      : 消息历史（add_messages reducer 自动追加）
-  - issue_task    : 原始 Issue 描述（只写一次）
-  - plan          : Planner 输出的任务计划（纯文本）
-  - test_output   : TestRunner 最新一次的执行报告（pytest 或 python 脚本输出）
-  - review_result : Reviewer 最新评审结论（"PASS" | "REJECT: <原因>"）
-  - review_retries: 当前已打回次数（防止无限循环）
+Profile -> Planner -> Coder/tools -> deterministic test plan/execution.
+Successful machine tests proceed to structured review; failures are classified
+and routed to bounded coder retry, replanning, test reselection or environment
+recovery. Typed JSON state drives routing and persists through checkpoints;
+legacy plan/test_output/review_result strings remain for display compatibility.
 """
 
 import os

@@ -16,7 +16,9 @@
 | Python sandbox image | Built successfully using the Google public Docker Hub cache |
 | Live Docker tests | Host-file isolation, no credentials/socket, timeout cleanup, and pytest failure → pass verified |
 | Live PostgreSQL checkpoint | Replanner checkpoint persisted and resumed on a separate temporary PostgreSQL container |
-| Real model smoke | Anthropic returned HTTP 401 invalid x-api-key; recorded as infra_error/model_service_error |
+| Real model connectivity | Ark `/api/plan` with `ark-code-latest` succeeded; service returned `deepseek-v4-1-flash` |
+| Real model repair smoke | Thinking mode rejected forced tool choice; disabling thinking fixed that error, but two repair attempts failed ExecutionPlan validation due to malformed model tool arguments |
+| Ark compatibility regression | 10 passed, 1 opt-in PostgreSQL test skipped; one dependency deprecation warning |
 
 Machine-readable aggregate reports are in [evidence/next](evidence/next).
 Full raw artifacts remain in the ignored `eval/results/` directory.
@@ -29,12 +31,19 @@ also do not substitute for real model regression runs.
 
 ## Open verification
 
-- The configured API Key is rejected by `https://api.anthropic.com` with HTTP
-  401 `invalid x-api-key`; `.env` has no alternate `OPENAI_BASE_URL`. Actual
-  model-driven repair, sanity-v1/v2/v3 comparisons and SWE-bench smoke cannot
-  be claimed successful. The attempted live run is preserved in
-  `eval/results/next-agent-auth-classified/`; its aggregate report is included
-  in `docs/evidence/next/`.
+- The user's current Ark console specifies the Anthropic endpoint
+  `https://ark.cn-beijing.volces.com/api/plan` and model `ark-code-latest`.
+  Local configuration now uses these for all four roles, with
+  `AUTOPATCH_DISABLE_THINKING=true`. The `/api/plan/v3` endpoint is for the
+  OpenAI protocol and does not match this project's Anthropic client.
+  Connectivity and a simple structured-output probe succeeded. However,
+  two real repair attempts returned invalid ExecutionPlan tool arguments;
+  inspection found malformed JSON, not a token-limit stop. These responses
+  are rejected by validation. Actual model-driven repair, full comparisons
+  and SWE-bench smoke remain unverified. Aggregate reports for both attempts
+  are included in `docs/evidence/next/`; raw artifacts remain in ignored
+  `eval/results/next-ark-plan-compatible/` and `next-ark-plan-confirm/`.
+  Earlier authentication failures are retained as historical evidence.
 - Docker Hub direct pulls timed out. The identical public Python base was pulled
   through [Google's official public cache](https://docs.cloud.google.com/artifact-registry/docs/pull-cached-dockerhub-images).
   No daemon-wide registry or network configuration was changed.
@@ -42,7 +51,7 @@ also do not substitute for real model regression runs.
   and graph resume rather than model reasoning.
 - SWE-bench prepared image/interpreter/workspace now propagate into the sandbox;
   this handoff has regression tests but the large official instances remain
-  unexecuted while model authentication is unavailable.
+  unexecuted; the current real model repair smoke has not passed.
 - `langgraph-checkpoint-postgres==2.0.19` is pinned to retain LangGraph 0.2;
   later 2.x and 3.x releases warn that they require a newer graph runtime.
 

@@ -159,6 +159,10 @@ _anthropic_kwargs = dict(
     api_key=os.getenv("OPENAI_API_KEY"),
     base_url=os.getenv("OPENAI_BASE_URL") or "https://api.anthropic.com",
 )
+# Some compatible providers enable thinking by default, which rejects the
+# forced tool choice used by with_structured_output. Keep this opt-in.
+if os.getenv("AUTOPATCH_DISABLE_THINKING", "false").lower() == "true":
+    _anthropic_kwargs["thinking"] = {"type": "disabled"}
 _llm_planner     = ChatAnthropic(model=PLANNER_MODEL_NAME,     temperature=0, streaming=True, **_anthropic_kwargs)
 _llm_coder_base  = ChatAnthropic(model=CODER_MODEL_NAME,       temperature=0, streaming=True, **_anthropic_kwargs)
 _llm_runner_base = ChatAnthropic(model=TEST_RUNNER_MODEL_NAME, temperature=0, streaming=True, **_anthropic_kwargs)
